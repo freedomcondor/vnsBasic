@@ -40,3 +40,12 @@ Apart from these three files, there are two other files
 		there are some other operations that are not listed here, but 
 		you can check them out in debugger.lua
 						
+	
+for github:
+	1. to pull, just 
+		git pull
+	2. to push
+		git add <filename>		/  git add *
+		git commit -m "a message, I changed something, I improved something"
+		git push origin master
+
