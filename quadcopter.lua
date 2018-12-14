@@ -21,23 +21,22 @@ end
 -------------------------------------------------------------------
 function step()
 	local tags = robot.cameras.fixed_camera.tag_detector
-	local pos, dir
 	if #tags ~= 0 then
 		-- get robot position
+		local pos, dir
 		pos, dir = getRobotPosition(tags[1])	
 			-- pos (0,0) in the middle, x+ right, y+ up , 
 			-- dir from -180 to 180, x+ as 0
 
 		-- get robot poximitiy sensors
+		local sensors
 		if #robot.radios["radio_0"].rx_data ~= 0 then
 			local rxBytes = robot.radios["radio_0"].rx_data[1]
 			local rxNumber = bytesToTable(rxBytes)
-			for index, value in pairs(rxNumber) do
-				print(index, value)
-			end
+			sensors = rxNumber
 		end
 
-		-- control robot
+		-- calculate something
 		local speed = 1
 		if dir < 5 and dir > -5 then
 			speed = 0.1
@@ -46,6 +45,7 @@ function step()
 			speed = 0
 		end
 
+		-- control robot wheels
 		if dir > 0 then
 			setRobotVelocity(speed, -speed)
 		else
@@ -62,7 +62,6 @@ end
      automatically by ARGoS. ]]
 -------------------------------------------------------------------
 function reset()
-	--set_velocity(0.1,0.1,0.5)
 end
 
 -------------------------------------------------------------------
@@ -82,7 +81,7 @@ function setRobotVelocity(x,y)
 end
 
 -------------------------------------------------------------------
-function set_velocity(x,y,theta)
+function setVelocity(x,y,theta)
 	robot.joints.axis0_axis1.set_target(x)
 	robot.joints.axis1_axis2.set_target(y)
 	robot.joints.axis2_body.set_target(theta)
