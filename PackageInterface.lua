@@ -1,5 +1,5 @@
-function tableToBytes(x_nt)	--a table of numbers
-	local str = ""
+function tableToBytes(id, x_nt)	--a table of numbers
+	local str = id .. " "
 	if type(x_nt) == "table" then
 		for index, value in ipairs(x_nt) do
 			if type(value) == "number" then
@@ -22,10 +22,19 @@ function bytesToTable(bytes_nt)
 	end
 
 	local a = {}
+	local id
+
+	-- get only the first str as id
+	for value in string.gmatch(str, "%S+") do	 -- get each divided by space
+		id = value									
+		break
+	end
+
+	-- get only the rest as numbers
 	local i = 0
 	for value in string.gmatch(str, "%S+") do	 -- get each divided by space
-		i = i + 1
 		a[i] = tonumber(value)
+		i = i + 1
 	end
-	return a
+	return a, id
 end

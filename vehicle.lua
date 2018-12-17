@@ -18,22 +18,21 @@ function init()
 	reset()
 end
 
-
-
 -------------------------------------------------------------------
 --[[ This function is executed at each time step
      It must contain the logic of your controller ]]
 -------------------------------------------------------------------
 function step()
 	-- get command and set speed accordingly
-	if #robot.radios["radio_0"].rx_data ~= 0 then
-		local rxBytes = robot.radios["radio_0"].rx_data[1]
-		local rxNumbers = bytesToTable(rxBytes)
-		setSpeed(rxNumbers[1], rxNumbers[2])
+	for index, rxBytes in pairs(robot.radios["radio_0"].rx_data) do
+		local rxNumbers, id = bytesToTable(rxBytes)
+		if id == robot.id then
+			setSpeed(rxNumbers[1], rxNumbers[2])
+		end
 	end
 
 	-- report proximity sensor readings
-	local txBytes = tableToBytes(robot.proximity)
+	local txBytes = tableToBytes(robot.id, robot.proximity)
 	robot.radios["radio_0"].tx_data(txBytes)
 end
 

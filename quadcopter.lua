@@ -1,7 +1,7 @@
 -- Put your global variables here
 
 require("PackageInterface")
-require("debugger")
+--require("debugger")
 
 ----------------------------------------------------------------------------------
 --   ARGoS Functions
@@ -32,17 +32,18 @@ function step()
 			boxPos = getBoxPosition(detection)
 		end	
 	else
-		setRobotVelocity(0, 0)
 		return -1
 	end
 
-	if #tags ~= 0 then
+	for index,tag in pairs(tags) do
+		-- get robot id
+		local robotID = tag.payload
+
 		-- get robot position
-		local robotPos, robotDir
-		robotPos, robotDir = getRobotPosition(tags[1])	
+		local robotPos, robotDir = getRobotPosition(tag)
 			-- pos (0,0) in the middle, x+ right, y+ up , 
 			-- dir from -180 to 180, x+ as 0
-		headPos = getRobotHead(tags[1])
+		headPos = getRobotHead(tag)
 
 		-- get robot poximitiy sensors
 		local sensors
@@ -67,12 +68,12 @@ function step()
 
 		if dif > 10 or dif < -10 then
 			if (dif > 0) then
-				setRobotVelocity(-1, 1)
+				setRobotVelocity(robotID, -1, 1)
 			else
-				setRobotVelocity(1, -1)
+				setRobotVelocity(robotID, 1, -1)
 			end
 		else
-			setRobotVelocity(1, 1)
+			setRobotVelocity(robotID, 1, 1)
 		end
 
 						--[[ substitude for angle alignment
@@ -113,8 +114,8 @@ end
 ----------------------------------------------------------------------------------
 --   Customize Functions
 ----------------------------------------------------------------------------------
-function setRobotVelocity(x,y)
-	local bytes = tableToBytes{x,y}
+function setRobotVelocity(id, x,y)
+	local bytes = tableToBytes(id, {x,y})
 	robot.radios["radio_0"].tx_data(bytes)
 end
 
