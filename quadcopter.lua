@@ -1,7 +1,7 @@
 -- Put your global variables here
 
 require("PackageInterface")
---require("debugger")
+require("debugger")
 
 ----------------------------------------------------------------------------------
 --   ARGoS Functions
@@ -53,21 +53,42 @@ function step()
 		end
 
 		-- calculate something
-		--[[local speed = 1]]
 		boxDir = getBoxDirtoRobot(robotPos, boxPos)
-		dif=boxDir-robotDir
-		a=(robotPos.y-boxPos.y)/(robotPos.x-boxPos.x)
-		b= robotPos.y - a*(robotPos.x)
-		logerr("dif in step," .. string.format("%.0f", dif))
-		if ((a*headPos.x + b - headPos.y)>5 or (a*headPos.x + b - headPos.y)<-5) then
-			if ((headPos.x-robotPos.x)*(boxPos.y-robotPos.y)-(headPos.y-robotPos.y)*(boxPos.x-robotPos.x))<0 then
-						setRobotVelocity(-1, 1)
-						else
-						setRobotVelocity(1, -1)
-						end
+		logerr("boxDir = " ..  string.format("%.0f", boxDir))
+		dif = boxDir - robotDir
+		while dif > 180 do
+			dif = dif - 360
+		end
+
+		while dif < -180 do
+			dif = dif + 360
+		end
+		logerr("dif = " .. string.format("%.0f", dif))
+
+		if dif > 10 or dif < -10 then
+			if (dif > 0) then
+				setRobotVelocity(-1, 1)
+			else
+				setRobotVelocity(1, -1)
+			end
 		else
 			setRobotVelocity(1, 1)
-		end	
+		end
+
+						--[[ substitude for angle alignment
+						a=(robotPos.y-boxPos.y)/(robotPos.x-boxPos.x)
+						b= robotPos.y - a*(robotPos.x)
+						logerr("dif in step," .. string.format("%.0f", dif))
+						if ((a*headPos.x + b - headPos.y)>5 or (a*headPos.x + b - headPos.y)<-5) then
+							if ((headPos.x-robotPos.x)*(boxPos.y-robotPos.y)-(headPos.y-robotPos.y)*(boxPos.x-robotPos.x))<0 then
+										setRobotVelocity(-1, 1)
+										else
+										setRobotVelocity(1, -1)
+										end
+						else
+							setRobotVelocity(1, 1)
+						end	
+						--]]
 	end
 end
 
@@ -124,11 +145,11 @@ function calcRobotDir(corners)
 	-- a direction is a number from -180 to 180, 
 	-- with 0 as the x+ axis of the quadcopter
 	local front = {}
-	front.x = (corners[1].x + corners[2].x) / 2
-	front.y = -(corners[1].y + corners[2].y) / 2
+	front.x = (corners[3].x + corners[4].x) / 2
+	front.y = -(corners[3].y + corners[4].y) / 2
 	local back = {}
-	back.x = (corners[3].x + corners[4].x) / 2
-	back.y = -(corners[3].y + corners[4].y) / 2
+	back.x = (corners[1].x + corners[2].x) / 2
+	back.y = -(corners[1].y + corners[2].y) / 2
 	local deg = calcDir(back, front)
 	return deg
 end
@@ -138,8 +159,8 @@ function getRobotHead(tag)
 	-- a direction is a number from 0 to 360, 
 	-- with 0 as the x+ axis of the quadcopter
 	local pos = {}
-	pos.x = ((tag.corners[1].x + tag.corners[2].x) / 2)- 320
-	pos.y = ((tag.corners[1].y + tag.corners[2].y) / 2) - 240
+	pos.x = ((tag.corners[3].x + tag.corners[4].x) / 2)- 320
+	pos.y = ((tag.corners[3].y + tag.corners[4].y) / 2) - 240
 	pos.y = -pos.y 				-- make it left handed coordination system
 	logerr("get Robot head, head = " .. string.format("%.0f, %.0f", pos.x, pos.y))
 	return pos
