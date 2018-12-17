@@ -3,13 +3,9 @@
 
 -- Use Ctrl + Click (Cmd + Click on Mac) to move a selected robot to a different location
 
-
-
 -- Put your global variables here
 
-package.path = package.path .. ";./src/testing/examples/?.lua"
 require("PackageInterface")
-
 --require("debugger")
 
 ----------------------------------------------------------------------------------
