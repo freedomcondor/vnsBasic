@@ -1,5 +1,5 @@
-function tableToBytes(id, x_nt)	--a table of numbers
-	local str = id .. " "
+function tableToBytes(toID, fromID, cmd, x_nt)	--a table of numbers
+	local str = toID .. " " .. fromID .. " " .. cmd .. " "
 	if type(x_nt) == "table" then
 		for index, value in ipairs(x_nt) do
 			if type(value) == "number" then
@@ -21,20 +21,21 @@ function bytesToTable(bytes_nt)
 		str = str .. string.char(bytes_nt[index])
 	end
 
-	local a = {}
-	local id
+	local toID
+	local fromID
+	local cmd
+	local data = {}
 
 	-- get only the first str as id
+	local i = 1
 	for value in string.gmatch(str, "%S+") do	 -- get each divided by space
-		id = value									
-		break
-	end
-
-	-- get only the rest as numbers
-	local i = 0
-	for value in string.gmatch(str, "%S+") do	 -- get each divided by space
-		a[i] = tonumber(value)
+		if i == 1 then toID = value 
+		else if i == 2 then fromID = value 
+		else if i == 3 then cmd = value 
+		else data[i - 3] = tonumber(value)
+		end end end
 		i = i + 1
 	end
-	return a, id
+
+	return toID, fromID, cmd, data
 end

@@ -25,14 +25,14 @@ end
 function step()
 	-- get command and set speed accordingly
 	for index, rxBytes in pairs(robot.radios["radio_0"].rx_data) do
-		local rxNumbers, id = bytesToTable(rxBytes)
-		if id == robot.id then
+		local toID, fromID, cmd, rxNumbers = bytesToTable(rxBytes)
+		if toID == robot.id and cmd == "setspeed" then
 			setSpeed(rxNumbers[1], rxNumbers[2])
 		end
 	end
 
 	-- report proximity sensor readings
-	local txBytes = tableToBytes(robot.id, robot.proximity)
+	local txBytes = tableToBytes("quadcopter0", robot.id, "sensor", robot.proximity)
 	robot.radios["radio_0"].tx_data(txBytes)
 end
 

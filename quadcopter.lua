@@ -17,24 +17,29 @@ end
      It must contain the logic of your controller ]]
 -------------------------------------------------------------------
 function step()
-	local tags = robot.cameras.fixed_camera.tag_detector
+	-- detect boxes into boxPos[i]
 	local leds = robot.cameras.fixed_camera.led_detector
+	local boxN = #leds
 	local boxPos = {}
 	if #leds > 0 then
-		logerr("-- " .. robot.id .. " detections --")
 		for i, detection in ipairs(leds) do
-			--[[logerr(string.format("(%.0f, %.0f, %.0f) at (%.0f, %.0f)",
-					      detection.color.red,
-					      detection.color.green,
-					      detection.color.blue,
-					      detection.center.x,
-					      detection.center.y))]]
-			boxPos = getBoxPosition(detection)
+			boxPos[i] = getBoxPosition(detection)
 		end	
 	else
 		return -1
 	end
 
+	-- get robot poximitiy sensors
+	local sensors = {}
+	for index, rxNumber in pairs(robot.radios["radio_0"].rx_data) do
+		local rxBytes = robot.radios["radio_0"].rx_data[1]
+		local toID, fromID, cmd, rxNumber = bytesToTable(rxBytes)
+		sensors[fromID] = rxNumber
+	end
+
+	-- for each robot
+	local tags = robot.cameras.fixed_camera.tag_detector
+	local robotN = #tags
 	for index,tag in pairs(tags) do
 		-- get robot id
 		local robotID = tag.payload
@@ -43,20 +48,11 @@ function step()
 		local robotPos, robotDir = getRobotPosition(tag)
 			-- pos (0,0) in the middle, x+ right, y+ up , 
 			-- dir from -180 to 180, x+ as 0
-		headPos = getRobotHead(tag)
-
-		-- get robot poximitiy sensors
-		local sensors
-		if #robot.radios["radio_0"].rx_data ~= 0 then
-			local rxBytes = robot.radios["radio_0"].rx_data[1]
-			local rxNumber = bytesToTable(rxBytes)
-			sensors = rxNumber
-		end
+		local headPos = getRobotHead(tag)
 
 		-- calculate something
-		boxDir = getBoxDirtoRobot(robotPos, boxPos)
-		logerr("boxDir = " ..  string.format("%.0f", boxDir))
-		dif = boxDir - robotDir
+		local boxDir = getBoxDirtoRobot(robotPos, boxPos[1])
+		local dif = boxDir - robotDir
 		while dif > 180 do
 			dif = dif - 360
 		end
@@ -64,7 +60,6 @@ function step()
 		while dif < -180 do
 			dif = dif + 360
 		end
-		logerr("dif = " .. string.format("%.0f", dif))
 
 		if dif > 10 or dif < -10 then
 			if (dif > 0) then
@@ -115,7 +110,7 @@ end
 --   Customize Functions
 ----------------------------------------------------------------------------------
 function setRobotVelocity(id, x,y)
-	local bytes = tableToBytes(id, {x,y})
+	local bytes = tableToBytes(id, robot.id , "setspeed", {x,y})
 	robot.radios["radio_0"].tx_data(bytes)
 end
 
@@ -137,7 +132,6 @@ function getRobotPosition(tag)
 	pos.x = tag.center.x - 320
 	pos.y = tag.center.y - 240
 	pos.y = -pos.y 				-- make it left handed coordination system
-	logerr("getRobotPosition, pos = ", string.format("%.0f, %.0f", pos.x, pos.y))
 	return pos, deg
 end
 
@@ -163,7 +157,6 @@ function getRobotHead(tag)
 	pos.x = ((tag.corners[3].x + tag.corners[4].x) / 2)- 320
 	pos.y = ((tag.corners[3].y + tag.corners[4].y) / 2) - 240
 	pos.y = -pos.y 				-- make it left handed coordination system
-	logerr("get Robot head, head = " .. string.format("%.0f, %.0f", pos.x, pos.y))
 	return pos
 end
 
@@ -176,7 +169,6 @@ function getBoxPosition (detection)
 	pos.x = detection.center.x - 320
 	pos.y = detection.center.y - 240
 	pos.y = -pos.y 				-- make it left handed coordination system
-	logerr("getBoxPosition," .. string.format("%.0f, %.0f", pos.x, pos.y))
 	return pos
 end
 

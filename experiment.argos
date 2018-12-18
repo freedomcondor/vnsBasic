@@ -78,7 +78,7 @@
     <distribute>
       <position method="uniform" min="-0.4,-0.4,0" max="0.4,0.4,0" />
       <orientation method="uniform" min="0,0,0" max="360,0,0" />
-      <entity quantity="3" max_trials="100">
+      <entity quantity="5" max_trials="100">
         <prototype id="vehicle" movable="true">
           <body position="0,0,0" orientation="0,0,0" />
           <controller config="vehicle_controller"/>
@@ -214,7 +214,7 @@
     <distribute>
       <position method="uniform" min="-0.4,-0.4,0" max="0.4,0.4,0" />
       <orientation method="uniform" min="0,0,0" max="360,0,0" />
-      <entity quantity="10" max_trials="100">
+      <entity quantity="15" max_trials="100">
         <box id="b0" size="0.04,0.04,0.02" movable="true" mass="0.05">
           <leds medium="leds">
             <led color="red" anchor="origin" offset="0,0,0.021"/>
