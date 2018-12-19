@@ -18,8 +18,14 @@ stateMachine = State:create{
 	substates = 
 	{
 		randomWalk = State:create{
-			enterMethod = function() end,
-			transMethod = function() end,
+			enterMethod = function() setSpeed(1, 1) end,
+			transMethod = function()
+				for index, rxBytes_bt in pairs(robot.radios["radio_0"].rx_data) do	-- byte table
+					local toID_s, fromID_s, cmd_s, rxNumbers_nt = bytesToTable(rxBytes_bt)
+					if toID_s == robot.id and cmd_s == "recruit" then
+					end
+				end
+			end,
 		},
 	} -- end of substates of stateMachine
 } -- end of stateMachine
@@ -40,16 +46,16 @@ end
 -------------------------------------------------------------------
 function step()
 	-- get command and set speed accordingly
-	for index, rxBytes in pairs(robot.radios["radio_0"].rx_data) do
-		local toID, fromID, cmd, rxNumbers = bytesToTable(rxBytes)
-		if toID == robot.id and cmd == "setspeed" then
-			setSpeed(rxNumbers[1], rxNumbers[2])
+	for index, rxBytes_bt in pairs(robot.radios["radio_0"].rx_data) do	-- byte table
+		local toID_s, fromID_s, cmd_s, rxNumbers_nt = bytesToTable(rxBytes_bt)
+		if toID_s == robot.id and cmd_s == "setspeed" then
+			setSpeed(rxNumbers_nt[1], rxNumbers_nt[2])
 		end
 	end
 
 	-- report proximity sensor readings
-	local txBytes = tableToBytes("quadcopter0", robot.id, "sensor", robot.proximity)
-	robot.radios["radio_0"].tx_data(txBytes)
+	local txBytes_bt = tableToBytes("quadcopter0", robot.id, "sensor", robot.proximity)
+	robot.radios["radio_0"].tx_data(txBytes_bt)
 end
 
 -------------------------------------------------------------------

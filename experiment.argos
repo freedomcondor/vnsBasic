@@ -26,7 +26,7 @@
           <joint id="base_wheel_left" mode="velocity"/>
           <joint id="base_wheel_right" mode="velocity"/>
         </joints>
-        <radios implementation="default" show_rays="true"/>
+        <radios implementation="default" show_rays="false"/>
         <proximity implementation="default" show_rays="true"/>
       </sensors>
       <params script="vehicle.lua" />
@@ -78,7 +78,7 @@
     <distribute>
       <position method="uniform" min="-0.4,-0.4,0" max="0.4,0.4,0" />
       <orientation method="uniform" min="0,0,0" max="360,0,0" />
-      <entity quantity="5" max_trials="100">
+      <entity quantity="15" max_trials="100">
         <prototype id="vehicle" movable="true">
           <body position="0,0,0" orientation="0,0,0" />
           <controller config="vehicle_controller"/>
