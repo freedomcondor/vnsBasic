@@ -6,7 +6,23 @@
 -- Put your global variables here
 
 require("PackageInterface")
+State = require("StateMachine")
 --require("debugger")
+
+----------------------------------------------------------------------------------
+--   State Machine
+----------------------------------------------------------------------------------
+
+stateMachine = State:create{
+	initial = "randomWalk",
+	substates = 
+	{
+		randomWalk = State:create{
+			enterMethod = function() end,
+			transMethod = function() end,
+		},
+	} -- end of substates of stateMachine
+} -- end of stateMachine
 
 ----------------------------------------------------------------------------------
 --   ARGoS Functions
