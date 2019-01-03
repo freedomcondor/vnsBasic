@@ -18,15 +18,38 @@ stateMachine = State:create{
 	substates = 
 	{
 		randomWalk = State:create{
-			enterMethod = function() setSpeed(1, 1) end,
 			transMethod = function()
-				for index, rxBytes_bt in pairs(robot.radios["radio_0"].rx_data) do	-- byte table
-					local toID_s, fromID_s, cmd_s, rxNumbers_nt = bytesToTable(rxBytes_bt)
-					if toID_s == robot.id and cmd_s == "recruit" then
-					end
+				local fromID_s, cmd_s, rxNumbers_nt = getCMD()
+				if cmd_s == "recruit" then
+					return "beingDriven"
 				end
 			end,
-		},
+			initial = "straight",
+			substates = {
+				straight = State:create{
+					enterMethod = function() setSpeed(1, 1) end,
+				}, 
+			},
+		}, -- end of randomWalk
+		beingDriven = State:create{
+			enterMethod = function() setSpeed(0, 0) print("i am beingDriven") end,
+			transMethod = function()
+				local fromID_s, cmd_s, rxNumbers_nt = getCMD()
+				if cmd_s == "setspeed" then
+					setSpeed(rxNumbers_nt[1], rxNumbers_nt[2])
+				end
+				if cmd_s == "dismiss" then
+					return "randomWalk"
+				end
+				if fromID_s ~= nil then
+					local txBytes_bt = tableToBytes(fromID_s, 
+					                                robot.id, 
+					                                "sensor",
+					                                robot.proximity)
+					robot.radios["radio_0"].tx_data(txBytes_bt)
+				end
+			end,
+		}, -- end of beingDriven
 	} -- end of substates of stateMachine
 } -- end of stateMachine
 
@@ -45,17 +68,7 @@ end
      It must contain the logic of your controller ]]
 -------------------------------------------------------------------
 function step()
-	-- get command and set speed accordingly
-	for index, rxBytes_bt in pairs(robot.radios["radio_0"].rx_data) do	-- byte table
-		local toID_s, fromID_s, cmd_s, rxNumbers_nt = bytesToTable(rxBytes_bt)
-		if toID_s == robot.id and cmd_s == "setspeed" then
-			setSpeed(rxNumbers_nt[1], rxNumbers_nt[2])
-		end
-	end
-
-	-- report proximity sensor readings
-	local txBytes_bt = tableToBytes("quadcopter0", robot.id, "sensor", robot.proximity)
-	robot.radios["radio_0"].tx_data(txBytes_bt)
+	stateMachine:step()
 end
 
 -------------------------------------------------------------------
@@ -84,4 +97,13 @@ end
 function setSpeed(x,y)
 	robot.joints.base_wheel_left.set_target(x)
 	robot.joints.base_wheel_right.set_target(-y)
+end
+
+function getCMD()
+	for index, rxBytes_bt in pairs(robot.radios["radio_0"].rx_data) do	-- byte table
+		local toID_s, fromID_s, cmd_s, rxNumbers_nt = bytesToTable(rxBytes_bt)
+		if toID_s == robot.id then
+			return fromID_s, cmd_s, rxNumbers_nt
+		end
+	end
 end
