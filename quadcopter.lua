@@ -29,6 +29,7 @@ function step()
 		return -1
 	end
 
+	--[[
 	-- get robot poximitiy sensors
 	local sensors = {}
 	for index, rxNumber in pairs(robot.radios["radio_0"].rx_data) do
@@ -36,6 +37,7 @@ function step()
 		local toID, fromID, cmd, rxNumber = bytesToTable(rxBytes)
 		sensors[fromID] = rxNumber
 	end
+	--]]
 
 	-- for each robot
 	local tags = robot.cameras.fixed_camera.tag_detector

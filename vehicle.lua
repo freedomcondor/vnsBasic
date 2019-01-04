@@ -6,7 +6,7 @@
 -- Put your global variables here
 
 require("PackageInterface")
-State = require("StateMachine")
+local State = require("StateMachine")
 --require("debugger")
 
 ----------------------------------------------------------------------------------
@@ -27,8 +27,23 @@ stateMachine = State:create{
 			initial = "straight",
 			substates = {
 				straight = State:create{
-					enterMethod = function() setSpeed(1, 1) end,
+					enterMethod = function() goFront() end,
+					transMethod = function()
+						if objFront() == true then
+							standStill()
+							return "left"
+						end
+						sideForward((math.random() - 0.5) * 5)
+					end,
 				}, 
+				left = State:create{
+					enterMethod = function() turnLeft() end,
+					transMethod = function()
+						if objFront() == false then
+							return "straight"
+						end
+					end,
+				},
 			},
 		}, -- end of randomWalk
 		beingDriven = State:create{
@@ -61,6 +76,9 @@ stateMachine = State:create{
 function init()
 	robot.tags.set_all_payloads(robot.id)
 	reset()
+
+	math.randomseed(1)
+	-- TODO: get random seed from xml
 end
 
 -------------------------------------------------------------------
@@ -99,6 +117,32 @@ function setSpeed(x,y)
 	robot.joints.base_wheel_right.set_target(-y)
 end
 
+local baseSpeed = 2
+function standStill()
+	setSpeed(0, 0)
+end
+function goFront()
+	setSpeed(baseSpeed, baseSpeed)
+end
+function turnLeft()
+	setSpeed(-baseSpeed, baseSpeed)
+end
+function sideForward(x) -- 0 < x < 1
+	setSpeed(baseSpeed - baseSpeed * x, baseSpeed + baseSpeed * x)
+end
+
+-------------------------------------------------------------------
+function objFront()
+	if robot.proximity[1] ~= 0 or
+	   robot.proximity[2] ~= 0 or
+	   robot.proximity[12] ~= 0 then
+		return true
+	else
+		return false
+	end
+end
+
+-------------------------------------------------------------------
 function getCMD()
 	for index, rxBytes_bt in pairs(robot.radios["radio_0"].rx_data) do	-- byte table
 		local toID_s, fromID_s, cmd_s, rxNumbers_nt = bytesToTable(rxBytes_bt)
