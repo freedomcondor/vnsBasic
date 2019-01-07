@@ -102,7 +102,7 @@ end
 --   Customize Functions
 ----------------------------------------------------------------------------------
 
-local baseSpeedN = 2
+local baseSpeedN = 10
 function standStill()
 	setSpeed(0, 0)
 end

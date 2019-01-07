@@ -54,7 +54,7 @@ function step()
 				while difN < -180 do
 					difN = difN + 360
 				end
-				local baseSpeedN = 3
+				local baseSpeedN = 7
 				if difN > 10 or difN < -10 then
 					if (difN > 0) then
 						setRobotVelocity(SON_VEHICLE_NAME, -baseSpeedN, baseSpeedN)
