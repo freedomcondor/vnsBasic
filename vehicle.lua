@@ -1,9 +1,6 @@
--- Use Shift + Click to select a robot
--- When a robot is selected, its variables appear in this editor
-
--- Use Ctrl + Click (Cmd + Click on Mac) to move a selected robot to a different location
-
--- Put your global variables here
+----------------------------------------------------------------------------------
+--   Global Variables
+----------------------------------------------------------------------------------
 
 require("PackageInterface")
 local State = require("StateMachine")
@@ -19,8 +16,8 @@ stateMachine = State:create{
 	{
 		randomWalk = State:create{
 			transMethod = function()
-				local fromID_s, cmd_s, rxNumbers_nt = getCMD()
-				if cmd_s == "recruit" then
+				local fromidS, cmdS, rxNumbersNT = getCMD()
+				if cmdS == "recruit" then
 					return "beingDriven"
 				end
 			end,
@@ -31,13 +28,16 @@ stateMachine = State:create{
 					transMethod = function()
 						if objFront() == true then
 							standStill()
-							return "left"
+							return "turn"
 						end
 						sideForward((math.random() - 0.5) * 5)
 					end,
 				}, 
-				left = State:create{
-					enterMethod = function() turnLeft() end,
+				turn = State:create{
+					enterMethod = function()
+						if math.random() > 0.5 then turnLeft()
+						                       else turnRight() end
+					end,
 					transMethod = function()
 						if objFront() == false then
 							return "straight"
@@ -47,21 +47,27 @@ stateMachine = State:create{
 			},
 		}, -- end of randomWalk
 		beingDriven = State:create{
-			enterMethod = function() setSpeed(0, 0) print("i am beingDriven") end,
-			transMethod = function()
-				local fromID_s, cmd_s, rxNumbers_nt = getCMD()
-				if cmd_s == "setspeed" then
-					setSpeed(rxNumbers_nt[1], rxNumbers_nt[2])
+			data = {countN = 0},
+			enterMethod = function() setSpeed(0, 0) print(getSelfIDS(), ": I am recruited") end,
+			transMethod = function(fdata, data, para)
+				local fromidS, cmdS, rxNumbersNT = getCMD()
+				if cmdS == "setspeed" then
+					setSpeed(rxNumbersNT[1], rxNumbersNT[2])
 				end
-				if cmd_s == "dismiss" then
+				if cmdS == "dismiss" then
+					print(getSelfIDS(), ": I am dismissed")
 					return "randomWalk"
 				end
-				if fromID_s ~= nil then
-					local txBytes_bt = tableToBytes(fromID_s, 
-					                                robot.id, 
-					                                "sensor",
-					                                robot.proximity)
-					robot.radios["radio_0"].tx_data(txBytes_bt)
+				if fromidS ~= nil then
+					sendCMD(fromidS, "sensor", getProximityTableNT())
+					data.countN = 0
+				else
+					-- i didn't get command when I should be
+					data.countN = data.countN + 1
+					if data.countN > 3 then
+						print(getSelfIDS(), ": I am lost")
+						return "randomWalk"
+					end
 				end
 			end,
 		}, -- end of beingDriven
@@ -71,39 +77,22 @@ stateMachine = State:create{
 ----------------------------------------------------------------------------------
 --   ARGoS Functions
 ----------------------------------------------------------------------------------
---[[ This function is executed every time you press the 'execute' button ]]
--------------------------------------------------------------------
 function init()
-	robot.tags.set_all_payloads(robot.id)
+	setTag(getSelfIDS())
 	reset()
-
-	math.randomseed(1)
-	-- TODO: get random seed from xml
 end
 
--------------------------------------------------------------------
---[[ This function is executed at each time step
-     It must contain the logic of your controller ]]
 -------------------------------------------------------------------
 function step()
 	stateMachine:step()
 end
 
 -------------------------------------------------------------------
---[[ This function is executed every time you press the 'reset'
-     button in the GUI. It is supposed to restore the state
-     of the controller to whatever it was right after init() was
-     called. The state of sensors and actuators is reset
-     automatically by ARGoS. ]]
--------------------------------------------------------------------
 function reset()
-
+	math.randomseed(1)
+	-- TODO: get random seed from xml
 end
 
-
--------------------------------------------------------------------
---[[ This function is executed only once, when the robot is removed
-     from the simulation ]]
 -------------------------------------------------------------------
 function destroy()
    -- put your code here
@@ -112,30 +101,29 @@ end
 ----------------------------------------------------------------------------------
 --   Customize Functions
 ----------------------------------------------------------------------------------
-function setSpeed(x,y)
-	robot.joints.base_wheel_left.set_target(x)
-	robot.joints.base_wheel_right.set_target(-y)
-end
 
-local baseSpeed = 2
+local baseSpeedN = 2
 function standStill()
 	setSpeed(0, 0)
 end
 function goFront()
-	setSpeed(baseSpeed, baseSpeed)
+	setSpeed(baseSpeedN, baseSpeedN)
 end
 function turnLeft()
-	setSpeed(-baseSpeed, baseSpeed)
+	setSpeed(-baseSpeedN, baseSpeedN)
+end
+function turnRight()
+	setSpeed(baseSpeedN, -baseSpeedN)
 end
 function sideForward(x) -- 0 < x < 1
-	setSpeed(baseSpeed - baseSpeed * x, baseSpeed + baseSpeed * x)
+	setSpeed(baseSpeedN - baseSpeedN * x, baseSpeedN + baseSpeedN * x)
 end
 
 -------------------------------------------------------------------
 function objFront()
-	if robot.proximity[1] ~= 0 or
-	   robot.proximity[2] ~= 0 or
-	   robot.proximity[12] ~= 0 then
+	if getProximityN(1) ~= 0 or
+	   getProximityN(2) ~= 0 or
+	   getProximityN(12) ~= 0 then
 		return true
 	else
 		return false
@@ -144,10 +132,50 @@ end
 
 -------------------------------------------------------------------
 function getCMD()
-	for index, rxBytes_bt in pairs(robot.radios["radio_0"].rx_data) do	-- byte table
-		local toID_s, fromID_s, cmd_s, rxNumbers_nt = bytesToTable(rxBytes_bt)
-		if toID_s == robot.id then
-			return fromID_s, cmd_s, rxNumbers_nt
+	for i, rxBytesBT in pairs(getReceivedDataTableBT()) do	-- byte table
+		local toIDS, fromIDS, cmdS, rxNumbersNT = bytesToTable(rxBytesBT)
+		if toIDS == getSelfIDS() then
+			return fromIDS, cmdS, rxNumbersNT
 		end
 	end
+end
+
+function sendCMD(toidS, cmdS, txDataNT)
+	local txBytesBT = tableToBytes(toidS, 
+	                               getSelfIDS(), 
+                                   cmdS,
+                                   txDataNT)
+	transData(txBytesBT)
+end
+
+----------------------------------------------------------------------------------
+--   Lua Interface
+----------------------------------------------------------------------------------
+function setSpeed(x,y)
+	robot.joints.base_wheel_left.set_target(x)
+	robot.joints.base_wheel_right.set_target(-y)
+end
+
+function getProximityN(x)
+	return robot.proximity[x]
+end
+
+function getProximityTableNT()
+	return robot.proximity
+end
+
+function transData(xBT)
+	robot.radios["radio_0"].tx_data(xBT)
+end
+
+function getReceivedDataTableBT()	--BT means byte table
+	return robot.radios["radio_0"].rx_data
+end
+
+function getSelfIDS()
+	return robot.id
+end
+
+function setTag(str)
+	robot.tags.set_all_payloads(str)
 end
