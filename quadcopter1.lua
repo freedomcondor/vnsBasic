@@ -37,9 +37,12 @@ function step()
 			end
 		else
 			-- a holding vehicle
-			local targetBoxV = getTargetBoxV(vehicleR.locV, boxesVT)
+			local targetBoxV, boxDir = getTargetBoxV(vehicleR.locV, boxesVT)
 			if targetBoxV ~= nil then
 				local boxDirtoRobotN = getBoxDirtoRobot(vehicleR.locV, targetBoxV)
+				local centerDirtoRobotN = getBoxDirtoRobot(vehicleR.locV, {x=0,y=0})
+
+				-- calc the box is left or right to the robot it self
 				local difN = boxDirtoRobotN - vehicleR.dirN
 				while difN > 180 do
 					difN = difN - 360
@@ -59,10 +62,15 @@ function step()
 					setRobotVelocity(vehicleR.idS, baseSpeedN, baseSpeedN)
 				end
 			else
-				-- no box to move, dismiss robot
-				print(getSelfIDS(), ": i dismiss vehicle", vehicleR.idS)
-				sendCMD(vehicleR.idS, "dismiss")
-				sonRobots[vehicleR.idS] = nil
+				-- no box to move, 
+				if boxDir == nil then
+					-- box in position, dismiss robot
+					print(getSelfIDS(), ": i dismiss vehicle", vehicleR.idS)
+					sendCMD(vehicleR.idS, "dismiss")
+					sonRobots[vehicleR.idS] = nil
+				else
+					sendCMD(vehicleR.idS, "turn", boxDir) -- boxDir is 1(left) or 2(right)
+				end
 			end
 		end -- end of if sonRobots
 	end -- end of for vehicle
@@ -190,6 +198,16 @@ function getTargetBoxV(robotLocV, boxesVT)
 			if cosN > 0.9 and lRobN > lRelN then
 				return boxV
 			end
+		end
+	end
+	for i, boxV in ipairs(boxesVT) do
+		-- relative is the vector from robot to box
+		local relativeV = {x = boxV.x - robotLocV.x,
+		                   y = boxV.y - robotLocV.y,}
+		local lRelN = math.sqrt(relativeV.x * relativeV.x +
+		                        relativeV.y * relativeV.y )
+		if lRelN < 1 then
+			return nil, 1	-- TODO: check left or right
 		end
 	end
 	return nil

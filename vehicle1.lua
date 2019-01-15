@@ -11,6 +11,7 @@ local State = require("StateMachine")
 ----------------------------------------------------------------------------------
 
 stateMachine = State:create{
+	data = {},
 	initial = "randomWalk",
 	substates = 
 	{
@@ -58,6 +59,14 @@ stateMachine = State:create{
 					print(getSelfIDS(), ": I am dismissed")
 					return "randomWalk"
 				end
+				if cmdS == "turn" then
+					if rxNumbersNT[1] == 1 then
+						fdata.turnBySelfDir = "left"
+					else
+						fdata.turnBySelfDir = "right"
+					end
+					return "turnBySelf"
+				end
 				if fromidS ~= nil then
 					sendCMD(fromidS, "sensor", getProximityTableNT())
 					data.countN = 0
@@ -71,6 +80,27 @@ stateMachine = State:create{
 				end
 			end,
 		}, -- end of beingDriven
+		turnBySelf = State:create{
+			enterMethod = function(fdata, data, para)
+				if fdata.turnBySelfDir == "left" then
+					turnLeft() else turnRight()
+				end
+			end,
+			transMethod = function()
+				if objFront() == false then goFront() end 
+					-- make it walk along the box in the future
+					
+				local fromidS, cmdS, rxNumbersNT = getCMD()
+				if cmdS == "setspeed" then
+					setSpeed(rxNumbersNT[1], rxNumbersNT[2])
+					return "beingDriven"
+				end
+				if cmdS == "dismiss" then
+					print(getSelfIDS(), ": I am dismissed")
+					return "randomWalk"
+				end
+			end,
+		}, -- end of turnBySelf
 	} -- end of substates of stateMachine
 } -- end of stateMachine
 
