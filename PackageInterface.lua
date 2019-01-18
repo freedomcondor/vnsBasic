@@ -1,41 +1,41 @@
-function tableToBytes(toID_s, fromID_s, cmd_s, data_nt)	--a table of numbers
-	local str = toID_s .. " " .. fromID_s .. " " .. cmd_s .. " "
-	if type(data_nt) == "table" then
-		for index, value_n in ipairs(data_nt) do
-			if type(value_n) == "number" then
-				str = str .. tostring(value_n) .. " "
+function tableToBytes(toIDS, fromIDS, cmdS, dataNST)	--a table of number/string
+	local str = toIDS .. " " .. fromIDS .. " " .. cmdS .. " "
+	if type(dataNST) == "table" then
+		for i, vNS in ipairs(dataNST) do
+			if type(vNS) == "number" or type(vNS) == "string" then
+				str = str .. tostring(vNS) .. " "
 			end
 		end
 	end
 
-	local bytes_nt = {}
+	local bytesNT = {}
 	for i = 1 , string.len(str) do
-		bytes_nt[i] = string.byte(str,i)
+		bytesNT[i] = string.byte(str,i)
 	end
-	return bytes_nt
+	return bytesNT
 end
 
-function bytesToTable(bytes_nt)
+function bytesToTable(bytesNT)
 	local str = ""
-	for index, value in ipairs(bytes_nt) do
-		str = str .. string.char(bytes_nt[index])
+	for index, value in ipairs(bytesNT) do
+		str = str .. string.char(bytesNT[index])
 	end
 
-	local toID_s
-	local fromID_s
-	local cmd_s
-	local data_nt = {}
+	local toIDS
+	local fromIDS
+	local cmdS
+	local dataNT = {}
 
 	-- get only the first str as id
 	local i = 1
-	for value_s in string.gmatch(str, "%S+") do	 -- get each divided by space
-		if i == 1 then toID_s = value_s 
-		else if i == 2 then fromID_s = value_s 
-		else if i == 3 then cmd_s = value_s 
-		else data_nt[i - 3] = tonumber(value_s)
+	for valueS in string.gmatch(str, "%S+") do	 -- get each divided by space
+		if i == 1 then toIDS = valueS 
+		else if i == 2 then fromIDS = valueS 
+		else if i == 3 then cmdS = valueS 
+		else dataNT[i - 3] = tonumber(valueS) or valueS
 		end end end
 		i = i + 1
 	end
 
-	return toID_s, fromID_s, cmd_s, data_nt
+	return toIDS, fromIDS, cmdS, dataNT
 end
