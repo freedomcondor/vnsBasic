@@ -4,6 +4,7 @@
 
 require("PackageInterface")
 require("debugger")
+Vec3 = require("math/Vector3")
 
 local sonRobots = {} -- recruitedVehicles["iamid"] = true
 
@@ -69,6 +70,7 @@ function step()
 					sendCMD(vehicleR.idS, "dismiss")
 					sonRobots[vehicleR.idS] = nil
 				else
+					print("I send a turn cmd")
 					sendCMD(vehicleR.idS, "turn", boxDir) -- boxDir is 1(left) or 2(right)
 				end
 			end
@@ -196,8 +198,12 @@ function getTargetBoxV(robotLocV, boxesVT)
 			local cosN = (-robotLocV.x * relativeV.x - robotLocV.y * relativeV.y) / 
 			             lRelN / lRobN
 			if cosN > 0.9 and lRobN > lRelN then
-				return boxV
+				print(i,"box out and with right direction")
+				return boxV, nil
 			end
+		else
+			print(i,"box in position")
+			return nil, nil
 		end
 	end
 	for i, boxV in ipairs(boxesVT) do
@@ -206,11 +212,20 @@ function getTargetBoxV(robotLocV, boxesVT)
 		                   y = boxV.y - robotLocV.y,}
 		local lRelN = math.sqrt(relativeV.x * relativeV.x +
 		                        relativeV.y * relativeV.y )
-		if lRelN < 1 then
-			return nil, 1	-- TODO: check left or right
+		local relativeV3 = Vec3:create(relativeV.x, relativeV.y, 0)
+		local centerV3 = Vec3:create(-robotLocV.x, -robotLocV.y, 0)
+		local dirV3 = relativeV3 * centerV3
+		local dirN = 1
+		if dirV3.z > 0 then -- box is on the right
+			dirN = 2
+		end
+		if lRelN < 50 then
+			print(i,"test1")
+			return nil, dirN	-- TODO: check left or right
 		end
 	end
-	return nil
+	print(i,"test2")
+	return nil, nil
 end
 
 -------------------------------------------------------------------

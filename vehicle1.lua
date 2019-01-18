@@ -11,15 +11,21 @@ local State = require("StateMachine")
 ----------------------------------------------------------------------------------
 
 stateMachine = State:create{
-	data = {},
+	data = {turnBySelfDir = nil},
 	initial = "randomWalk",
 	substates = 
 	{
 		randomWalk = State:create{
-			transMethod = function()
+			transMethod = function(fdata, data, para)
 				local fromidS, cmdS, rxNumbersNT = getCMD()
 				if cmdS == "recruit" then
 					return "beingDriven"
+				end
+
+				if objFront() == true then
+					if math.random() > 0.5 then fdata.turnBySelfDir = "left"
+					                       else fdata.turnBySelfDir = "right" end
+					return "turnBySelf"
 				end
 			end,
 			initial = "straight",
@@ -81,10 +87,10 @@ stateMachine = State:create{
 			end,
 		}, -- end of beingDriven
 		turnBySelf = State:create{
+			data = {turnBySelfDir = nil},
 			enterMethod = function(fdata, data, para)
-				if fdata.turnBySelfDir == "left" then
-					turnLeft() else turnRight()
-				end
+				print(getSelfIDS(), "i am turnBySelf", fdata.turnBySelfDir)
+				data.turnBySelfDir = fdata.turnBySelfDir
 			end,
 			transMethod = function()
 				if objFront() == false then goFront() end 
@@ -100,6 +106,32 @@ stateMachine = State:create{
 					return "randomWalk"
 				end
 			end,
+			initial = "turn",
+			substates = {
+				turn = State:create{
+					enterMethod = function(fdata, data, para)
+						if fdata.turnBySelfDir == "left" then turnLeft()
+						                                 else turnRight() end
+					end,
+					transMethod = function()
+						if objFront() == false then return "walkAlong" end 
+					end,
+				},
+				walkAlong = State:create{
+					enterMethod = function() goFront() end,
+					transMethod = function(fdata, data, para)
+						--[[ it doesn't work
+						local testFunc, turnFunc
+						if fdata.turnBySelfDir == "left" then testFunc = objNearRight
+						                                      turnFunc = turnFrontRight
+						                                 else testFunc = objNearLeft 
+						                                      turnFunc = turnFrontLeft end
+						if testFunc() == false then turnFunc()
+						                       else goFront() end
+						--]]
+					end,
+				},
+			}, -- end of substates of turnBySelf
 		}, -- end of turnBySelf
 	} -- end of substates of stateMachine
 } -- end of stateMachine
@@ -142,14 +174,21 @@ end
 function turnLeft()
 	setSpeed(-baseSpeedN, baseSpeedN)
 end
+function turnFrontLeft()
+	setSpeed(0, baseSpeedN)
+end
 function turnRight()
 	setSpeed(baseSpeedN, -baseSpeedN)
+end
+function turnFrontRight()
+	setSpeed(baseSpeedN, 0)
 end
 function sideForward(x) -- 0 < x < 1
 	setSpeed(baseSpeedN - baseSpeedN * x, baseSpeedN + baseSpeedN * x)
 end
 
 -------------------------------------------------------------------
+-- Proximity sensors:  1 in front, 4 left, 7 back, 10 right
 function objFront()
 	if getProximityN(1) ~= 0 or
 	   getProximityN(2) ~= 0 or
@@ -158,6 +197,30 @@ function objFront()
 	else
 		return false
 	end
+end
+
+function objNearLeft()
+	if getProximityN(3) ~= 0 and
+	   getProximityN(4) ~= 0 and
+	   getProximityN(5) ~= 0 then return true
+	                         else return false end
+end
+
+function objFarLeft()
+	if getProximityN(4) ~= 0 then return true
+	                         else return false end
+end
+
+function objNearRight()
+	if getProximityN(10) ~= 0 then return true
+	                          else return false end
+end
+
+function objFarRight()
+	if getProximityN(9) ~= 0 or
+	   getProximityN(10) ~= 0 or
+	   getProximityN(11) ~= 0 then return true
+	                          else return false end
 end
 
 -------------------------------------------------------------------
