@@ -39,3 +39,39 @@ function bytesToTable(bytesNT)
 
 	return toIDS, fromIDS, cmdS, dataNT
 end
+
+-------------------------------------------------------------------
+-- get the first cmd to it self
+function getCMD()
+	for i, rxBytesBT in pairs(getReceivedDataTableBT()) do	-- byte table
+		local toIDS, fromIDS, cmdS, rxNumbersNT = bytesToTable(rxBytesBT)
+		if toIDS == getSelfIDS() then
+			return fromIDS, cmdS, rxNumbersNT
+		end
+	end
+end
+
+-- get the first cmd to it self
+function sendCMD(toidS, cmdS, txDataNT)
+	local txBytesBT = tableToBytes(toidS, 
+	                               getSelfIDS(), 
+	                               cmdS,
+	                               txDataNT)
+	transData(txBytesBT)
+end
+
+function getCMDListCT()		--CT:  cmd table(array)
+	local i = 0
+	local listCT = {}
+	for _, rxBytesBT in pairs(getReceivedDataTableBT()) do	-- byte table
+		local toIDS, fromIDS, cmdS, rxNumbersNT = bytesToTable(rxBytesBT)
+		if toIDS == getSelfIDS() then
+			i = i + 1
+			listCT[i] = {
+				fromIDS = fromIDS,
+				cmdS = cmdS,
+				dataNT = rxNumbersNT,
+			}
+		end
+	end
+end

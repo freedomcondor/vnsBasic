@@ -1,6 +1,6 @@
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 --   Global Variables
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 
 require("PackageInterface")
 local Vec3 = require("math/Vector3")
@@ -9,9 +9,9 @@ local Vec3 = require("math/Vector3")
 
 local sonRobots = {} -- recruitedVehicles["iamid"] = true
 
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 --   ARGoS Functions
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 function init()
 	reset()
 end
@@ -70,14 +70,15 @@ function destroy()
 	-- put your code here
 end
 
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 --   Customize Functions
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 function setRobotVelocity(id, x,y)
-	local bytes = tableToBytes(id, robot.id , "setspeed", {x,y})
+	local bytes = tableToBytes(id, getSelfIDS(), "setspeed", {x,y})
 	robot.radios["radio_0"].tx_data(bytes)
 end
 
+--[[
 -------------------------------------------------------------------
 function getCMD()
 	for i, rxBytesBT in pairs(getReceivedDataTableBT()) do	-- byte table
@@ -95,6 +96,7 @@ function sendCMD(toidS, cmdS, txDataNT)
 	                               txDataNT)
 	transData(txBytesBT)
 end
+--]]
 
 -------------------------------------------------------------------
 -- get boxes
@@ -132,7 +134,11 @@ function getRobotsRT()
 			-- loc (0,0) in the middle, x+ right, y+ up , 
 			-- dir from 0 to 360, x+ as 0
 
-		robotsRT[i] = {locV = locV, dirN = dirN, idS = idS}
+		robotsRT[i] = {locV = locV, 
+		               dirN = dirN, 
+		               idS = idS, 
+		               father = getSelfIDS(),
+		              }
 		robotsRT[idS] = robotsRT[i]
 	end
 	return robotsRT
@@ -164,7 +170,8 @@ function makeRobotInfoDataNST(robotsRT)
 		dataNST[i+1] = v.locV.x
 		dataNST[i+2] = v.locV.y
 		dataNST[i+3] = v.dirN
-		i = i + 4
+		dataNST[i+4] = v.father
+		i = i + 5
 	end
 	return dataNST
 end
@@ -179,7 +186,8 @@ function bindRobotInfoDataRT(dataNST)
 		robotsRT[j].locV = {x = dataNST[i+1],
 		                    y = dataNST[i+2]}
 		robotsRT[j].dirN = dataNST[i+3]
-		i = i + 4
+		robotsRT[j].father = dataNST[i+4]
+		i = i + 5
 	end
 	return robotsRT
 end
@@ -296,8 +304,10 @@ function joinReceivedRobotsRT(robotsRT, receivedRobotsRT)
 		if robotsRT[vR.idS] ~= nil then
 			local thN = robotsRT[vR.idS].dirN - vR.dirN
 			local thRadN = thN * math.pi / 180
-			paraT.x = vR.locV.x * math.cos(thRadN) - vR.locV.y * math.sin(thRadN)
-			paraT.y = vR.locV.x * math.sin(thRadN) + vR.locV.y * math.cos(thRadN)
+			paraT.x = vR.locV.x * math.cos(thRadN) - 
+			          vR.locV.y * math.sin(thRadN)
+			paraT.y = vR.locV.x * math.sin(thRadN) + 
+			          vR.locV.y * math.cos(thRadN)
 				-- new location of received after rotation
 			paraT.x = robotsRT[vR.idS].locV.x - paraT.x
 			paraT.y = robotsRT[vR.idS].locV.y - paraT.y
@@ -318,11 +328,15 @@ function joinReceivedRobotsRT(robotsRT, receivedRobotsRT)
 				nRobots = nRobots + 1
 				robotsRT[nRobots] = {}
 				robotsRT[nRobots].locV = {
-					x = vR.locV.x * math.cos(thRadN) - vR.locV.y * math.sin(thRadN) + paraT.x,
-					y = vR.locV.x * math.sin(thRadN) + vR.locV.y * math.cos(thRadN) + paraT.y,
+					x = vR.locV.x * math.cos(thRadN) - 
+					    vR.locV.y * math.sin(thRadN) + paraT.x,
+					y = vR.locV.x * math.sin(thRadN) + 
+					    vR.locV.y * math.cos(thRadN) + paraT.y,
 				}
 				robotsRT[nRobots].idS = vR.idS
-				robotsRT[nRobots].dirN = (vR.dirN + thN) % 360  -- it should still be inside range [0,360]
+				robotsRT[nRobots].father = vR.father
+				robotsRT[nRobots].dirN = (vR.dirN + thN) % 360  
+					-- it should still be inside range [0,360]
 				robotsRT[vR.idS] = robotsRT[nRobots]
 			end
 		end
