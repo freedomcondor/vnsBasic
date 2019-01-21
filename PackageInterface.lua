@@ -24,7 +24,7 @@ function bytesToTable(bytesNT)
 	local toIDS
 	local fromIDS
 	local cmdS
-	local dataNT = {}
+	local dataNST = {}
 
 	-- get only the first str as id
 	local i = 1
@@ -32,16 +32,25 @@ function bytesToTable(bytesNT)
 		if i == 1 then toIDS = valueS 
 		else if i == 2 then fromIDS = valueS 
 		else if i == 3 then cmdS = valueS 
-		else dataNT[i - 3] = tonumber(valueS) or valueS
+		else dataNST[i - 3] = tonumber(valueS) or valueS
 		end end end
 		i = i + 1
 	end
 
-	return toIDS, fromIDS, cmdS, dataNT
+	return toIDS, fromIDS, cmdS, dataNST
 end
 
 -------------------------------------------------------------------
--- get the first cmd to it self
+function sendCMD(toidS, cmdS, txDataNT)
+	local txBytesBT = tableToBytes(toidS, 
+	                               getSelfIDS(), 
+	                               cmdS,
+	                               txDataNT)
+	transData(txBytesBT)
+end
+
+-- get the first cmd, 
+-- works only when there is supposed to receive only one cmd
 function getCMD()
 	for i, rxBytesBT in pairs(getReceivedDataTableBT()) do	-- byte table
 		local toIDS, fromIDS, cmdS, rxNumbersNT = bytesToTable(rxBytesBT)
@@ -51,15 +60,7 @@ function getCMD()
 	end
 end
 
--- get the first cmd to it self
-function sendCMD(toidS, cmdS, txDataNT)
-	local txBytesBT = tableToBytes(toidS, 
-	                               getSelfIDS(), 
-	                               cmdS,
-	                               txDataNT)
-	transData(txBytesBT)
-end
-
+-- get a cmd list
 function getCMDListCT()		--CT:  cmd table(array)
 	local i = 0
 	local listCT = {}
@@ -70,8 +71,10 @@ function getCMDListCT()		--CT:  cmd table(array)
 			listCT[i] = {
 				fromIDS = fromIDS,
 				cmdS = cmdS,
-				dataNT = rxNumbersNT,
+				dataNST = rxNumbersNT,
 			}
 		end
 	end
+
+	return listCT
 end

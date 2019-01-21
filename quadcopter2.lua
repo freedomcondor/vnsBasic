@@ -5,9 +5,15 @@
 require("PackageInterface")
 local Vec3 = require("math/Vector3")
 
---require("debugger")
+require("debugger")
 
-local sonRobots = {} -- recruitedVehicles["iamid"] = true
+local parentIndex = {
+	quadcopter0 = nil,
+	quadcopter1 = "quadcopter0",
+	quadcopter2 = "quadcopter0",
+	quadcopter3 = "quadcopter1",
+}
+local transParaIndex = {}
 
 ------------------------------------------------------------------------
 --   ARGoS Functions
@@ -25,38 +31,58 @@ function step()
 
 	-- detect robots into robotsRT[i] and robotsRT[id]
 	local robotsRT = getRobotsRT()
-		-- R for robot = {locV, dirN, idS}
-	
-	-------  qudcopter1 ----------
-	if getSelfIDS() == "quadcopter1" then
-		setVelocity(0,0,1)
+		-- R means robot = {locV, dirN, idS, parent}
 
-		local robotsDataNST = makeRobotInfoDataNST(robotsRT) -- NST means a table of number/string
-		sendCMD("quadcopter0", "robotsInfo", robotsDataNST)
-
-		---[[
-		print("i am 1, I got:")
-		for i, v in ipairs(robotsRT) do
-			print("\t", i, v.idS, v.locV.x, v.locV.y, v.dirN)
+	-- receive robots from other quadcopter
+	local cmdListCT = getCMDListCT()  
+		-- CT means CMD Table(array)
+		-- a cmd contains: {cmdS, fromIDS, dataNST}
+	for i, cmdC in ipairs(cmdListCT) do
+		if cmdC.cmdS == "robotsInfo" then
+			local receivedRobotsRT = bindRobotInfoDataRT(cmdC.dataNST)
+			robotsRT, transParaIndex[cmdC.fromIDS] = 
+				joinReceivedRobotsRT(robotsRT, receivedRobotsRT)
 		end
-		--]]
 	end
 
-	-------  qudcopter0 ----------
-	if getSelfIDS() == "quadcopter0" then
-		local fromIDS, cmdS, rxNumbersNT = getCMD()
-		if fromIDS == "quadcopter1" and cmdS == "robotsInfo" then
-			local receivedRobotsRT = bindRobotInfoDataRT(rxNumbersNT)
+	-- send robots to parent quadcopter 
+	if parentIndex[getSelfIDS()] ~= nil then
+		setVelocity(0,0,1)
+		local robotsDataNST = makeRobotInfoDataNST(robotsRT) -- NST means a table of number or string
+		sendCMD(parentIndex[getSelfIDS()], "robotsInfo", robotsDataNST)
+	end
 
-			robotsRT = joinReceivedRobotsRT(robotsRT, receivedRobotsRT)
+	-- transfer robot control cmd
+	--[[
+	for i, cmdC in ipairs(cmdListCT) do
+		if cmdC.cmdS == "setspeed" then
+			local id = cmdC.dataNST[0]
+			local x = cmdC.dataNST[1]
+			local y = cmdC.dataNST[2]
+			if robotsRT[id] ~= nil then
+				if robotsRT[id].parent == getSelfIDS() then
+					setRobotVelocity(id, x, y)
+				else
+					local thN = -transParaIndex[robotsRT[id].parent].thN
+					local thRadN = thN * math.pi / 180
+					local newx = x * math.cos(thRadN) - 
+					             y * math.sin(thRadN)
+					local newy = x * math.sin(thRadN) + 
+					             y * math.cos(thRadN)
+					cmdC.dataNST[1] = newx
+					cmdC.dataNST[2] = newy
+					sendCMD(robotsRT[id].parent, "setspeed", cmdC.dataNST)
+				end
+			end
+		end
+	end
+	--]]
 
-		---[[
-		print("I am 0, I got:")
+	if parentIndex[getSelfIDS()] == nil then
+		sendCMD("quadcopter1", "setspeed", {"vehicle0", 1, 1})
+		print("I am parent, I got:")
 		for i, v in ipairs(robotsRT) do
 			print("\t", i, v.idS, v.locV.x, v.locV.y, v.dirN)
-		end
-		--]]
-		
 		end
 	end
 end
@@ -137,7 +163,7 @@ function getRobotsRT()
 		robotsRT[i] = {locV = locV, 
 		               dirN = dirN, 
 		               idS = idS, 
-		               father = getSelfIDS(),
+		               parent = getSelfIDS(),
 		              }
 		robotsRT[idS] = robotsRT[i]
 	end
@@ -170,7 +196,7 @@ function makeRobotInfoDataNST(robotsRT)
 		dataNST[i+1] = v.locV.x
 		dataNST[i+2] = v.locV.y
 		dataNST[i+3] = v.dirN
-		dataNST[i+4] = v.father
+		dataNST[i+4] = v.parent
 		i = i + 5
 	end
 	return dataNST
@@ -186,7 +212,7 @@ function bindRobotInfoDataRT(dataNST)
 		robotsRT[j].locV = {x = dataNST[i+1],
 		                    y = dataNST[i+2]}
 		robotsRT[j].dirN = dataNST[i+3]
-		robotsRT[j].father = dataNST[i+4]
+		robotsRT[j].parent = dataNST[i+4]
 		i = i + 5
 	end
 	return robotsRT
@@ -299,6 +325,7 @@ end
 
 --------------------------------------------------------------------
 function joinReceivedRobotsRT(robotsRT, receivedRobotsRT)
+	-- find a common robot
 	local paraT = {} -- rotation and translation parameters
 	for i, vR in ipairs(receivedRobotsRT) do
 		if robotsRT[vR.idS] ~= nil then
@@ -334,14 +361,14 @@ function joinReceivedRobotsRT(robotsRT, receivedRobotsRT)
 					    vR.locV.y * math.cos(thRadN) + paraT.y,
 				}
 				robotsRT[nRobots].idS = vR.idS
-				robotsRT[nRobots].father = vR.father
+				robotsRT[nRobots].parent = vR.parent
 				robotsRT[nRobots].dirN = (vR.dirN + thN) % 360  
 					-- it should still be inside range [0,360]
 				robotsRT[vR.idS] = robotsRT[nRobots]
 			end
 		end
 	end
-	return robotsRT
+	return robotsRT, paraT
 end
 
 ----------------------------------------------------------------------------------
