@@ -52,7 +52,34 @@ function step()
 		sendCMD(parentIndex[getSelfIDS()], "robotsInfo", robotsDataNST)
 	end
 
+	-- transfer robot control cmd
+	--[[
+	for i, cmdC in ipairs(cmdListCT) do
+		if cmdC.cmdS == "setspeed" then
+			local id = cmdC.dataNST[0]
+			local x = cmdC.dataNST[1]
+			local y = cmdC.dataNST[2]
+			if robotsRT[id] ~= nil then
+				if robotsRT[id].parent == getSelfIDS() then
+					setRobotVelocity(id, x, y)
+				else
+					local thN = -transParaIndex[robotsRT[id].parent].thN
+					local thRadN = thN * math.pi / 180
+					local newx = x * math.cos(thRadN) - 
+					             y * math.sin(thRadN)
+					local newy = x * math.sin(thRadN) + 
+					             y * math.cos(thRadN)
+					cmdC.dataNST[1] = newx
+					cmdC.dataNST[2] = newy
+					sendCMD(robotsRT[id].parent, "setspeed", cmdC.dataNST)
+				end
+			end
+		end
+	end
+	--]]
+
 	if parentIndex[getSelfIDS()] == nil then
+		sendCMD("quadcopter1", "setspeed", {"vehicle0", 1, 1})
 		print("I am parent, I got:")
 		for i, v in ipairs(robotsRT) do
 			print("\t", i, v.idS, v.locV.x, v.locV.y, v.dirN)
