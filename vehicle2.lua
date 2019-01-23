@@ -224,26 +224,6 @@ function objFarRight()
 	                          else return false end
 end
 
---[[
--------------------------------------------------------------------
-function getCMD()
-	for i, rxBytesBT in pairs(getReceivedDataTableBT()) do	-- byte table
-		local toIDS, fromIDS, cmdS, rxNumbersNT = bytesToTable(rxBytesBT)
-		if toIDS == getSelfIDS() then
-			return fromIDS, cmdS, rxNumbersNT
-		end
-	end
-end
-
-function sendCMD(toidS, cmdS, txDataNT)
-	local txBytesBT = tableToBytes(toidS, 
-	                               getSelfIDS(), 
-                                   cmdS,
-                                   txDataNT)
-	transData(txBytesBT)
-end
---]]
-
 ------------------------------------------------------------------------
 --   Lua Interface
 ------------------------------------------------------------------------

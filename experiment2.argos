@@ -61,7 +61,7 @@
   <!-- *********************** -->
   <!-- * Arena configuration * -->
   <!-- *********************** -->
-  <arena size="1, 1, 0.5" center="0, 0, 0.125">
+  <arena size="1, 1, 0.7" center="0, 0, 0.125">
     <box id="bn" size="0.025,0.975,0.05" movable="false" mass="10">
       <body position="0.4875,0.0125,0"  orientation="0,0,0" />
     </box>
