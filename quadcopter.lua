@@ -39,7 +39,7 @@ function step()
 				return -- return of step()
 			end
 		end
-	else if STATE == "driving" then
+	elseif STATE == "driving" then
 		local sonVehicle = robotsRT[SON_VEHICLE_NAME]
 		if sonVehicle ~= nil then
 			local targetBoxV = getTargetBoxV(sonVehicle.locV, boxesVT)
@@ -79,7 +79,7 @@ function step()
 			return
 			-- if I lost the robot (maybe the robot is out of range)
 		end
-	end end -- two ends of STATE == "recruting" and "driving"
+	end 
 end
 
 -------------------------------------------------------------------

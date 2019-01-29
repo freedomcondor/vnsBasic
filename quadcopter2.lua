@@ -313,6 +313,8 @@ function joinReceivedRobotsRT(robotsRT, receivedRobotsRT)
 			paraT.y = robotsRT[vR.idS].locV.y - paraT.y
 				-- translation vector
 			paraT.thN = thN
+
+			--break?
 		end
 	end
 
