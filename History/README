@@ -1,0 +1,51 @@
+This is a little testbench for our first vns demo
+
+Among these files, three are the most important
+	experiment.argos is the .argos xml file
+	quadcopter.lua and vehicle.lua are the controller file
+
+Apart from these three files, there are two other files
+	1. PackageInterface.lua
+		It provides functions to transform a table of numbers into a table of Bytes and vise-versa
+		in order to enable the radio contact
+
+		example:	
+			a = {1, 2.3, -4,55, 7}
+			b = tableToBytes(a)
+			transmit(b)	   
+				-- transmit() is to transmit bytes, in our case it is
+						robot.radios["radio_0"].tx_data()
+
+			----------------------------------------------
+			b = receive()
+				-- receive() is to receive bytes, in our case it is
+						robot.radios["radio_0"].rx_data[i]
+			a = bytesToTable(b)
+			then a will be {1, 2.3, -4,55, 7}
+
+	2. debugger.lua
+		This is a lua debugger, it will be usefull in a lot of cases
+		To use it, just require("debugger") at the beginning of a lua file
+		and then you will see the program pauses at the first line when lua starts to run
+		and then you will be able to give a command to the debugger
+
+		It has some basic operations:
+			r      :            keep running the rest discard all the breakpoint
+			c      :            keep running but pause at the next breakpoint
+			n or just Enter :   step over line by line
+			s      :            step in
+			b 14   :            set a breakpoint at line 14
+			p a[1] :            print variable a[1]
+			q      :            quit the program
+		there are some other operations that are not listed here, but 
+		you can check them out in debugger.lua
+						
+	
+for github:
+	1. to pull, just 
+		git pull
+	2. to push
+		git add <filename>		/  git add *
+		git commit -m "a message, I changed something, I improved something"
+		git push origin master
+

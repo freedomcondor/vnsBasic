@@ -1,16 +1,23 @@
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 --   Global Variables
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 
 require("PackageInterface")
---require("debugger")
+local Vec3 = require("math/Vector3")
 
-local STATE = "recruiting"
-local SON_VEHICLE_NAME = nil
+require("debugger")
 
-----------------------------------------------------------------------------------
+local parentIndex = {
+	quadcopter0 = nil,
+	quadcopter1 = "quadcopter0",
+	quadcopter2 = "quadcopter0",
+	quadcopter3 = "quadcopter1",
+}
+local transParaIndex = {}
+
+------------------------------------------------------------------------
 --   ARGoS Functions
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 function init()
 	reset()
 end
@@ -18,68 +25,39 @@ end
 -------------------------------------------------------------------
 function step()
 	-- detect boxes into boxesVT[i]
-	--local boxPos_vt = getBoxesVT()	
+	-- local boxPos_vt = getBoxesVT()	
 	local boxesVT = getBoxesVT()	
 		-- V means vector = {x,y}
 
 	-- detect robots into robotsRT[i] and robotsRT[id]
 	local robotsRT = getRobotsRT()
-		-- R for robot = {locV, dirN, idS}
+		-- R means robot = {locV, dirN, idS, parent}
 
-	if STATE == "recruiting" then
-		-- for each robot, if it has a box to move
-		for i, vehicleR in ipairs(robotsRT) do
-			local targetBoxV = getTargetBoxV(vehicleR.locV, boxesVT)
-			if targetBoxV ~= nil then
-				sendCMD(vehicleR.idS, "recruit")
-
-				STATE = "driving"
-				SON_VEHICLE_NAME = vehicleR.idS
-				print(getSelfIDS(), ": i recruit vehicle", SON_VEHICLE_NAME)
-				return -- return of step()
-			end
+	-- receive robots from other quadcopter
+	local cmdListCT = getCMDListCT()  
+		-- CT means CMD Table(array)
+		-- a cmd contains: {cmdS, fromIDS, dataNST}
+	for i, cmdC in ipairs(cmdListCT) do
+		if cmdC.cmdS == "robotsInfo" then
+			local receivedRobotsRT = bindRobotInfoDataRT(cmdC.dataNST)
+			robotsRT, transParaIndex[cmdC.fromIDS] = 
+				joinReceivedRobotsRT(robotsRT, receivedRobotsRT)
 		end
-	else if STATE == "driving" then
-		local sonVehicle = robotsRT[SON_VEHICLE_NAME]
-		if sonVehicle ~= nil then
-			local targetBoxV = getTargetBoxV(sonVehicle.locV, boxesVT)
+	end
 
-			if targetBoxV ~= nil then
-				local boxDirtoRobotN = getBoxDirtoRobot(sonVehicle.locV, targetBoxV)
-				local difN = boxDirtoRobotN - sonVehicle.dirN
-				while difN > 180 do
-					difN = difN - 360
-				end
-	
-				while difN < -180 do
-					difN = difN + 360
-				end
-				local baseSpeedN = 3
-				if difN > 10 or difN < -10 then
-					if (difN > 0) then
-						setRobotVelocity(SON_VEHICLE_NAME, -baseSpeedN, baseSpeedN)
-					else
-						setRobotVelocity(SON_VEHICLE_NAME, baseSpeedN, -baseSpeedN)
-					end
-				else
-					setRobotVelocity(SON_VEHICLE_NAME, baseSpeedN, baseSpeedN)
-				end
-			else
-				-- no box to move, dismiss robot
-				print(getSelfIDS(), ": i dismiss vehicle", SON_VEHICLE_NAME)
-				sendCMD(sonVehicle.idS, "dismiss")
-				STATE = "recruiting"
-				SON_VEHICLE_NAME = nil
-				return
-			end
-		else
-			print(getSelfIDS(), ": i lost vehicle", SON_VEHICLE_NAME)
-			STATE = "recruiting"
-			SON_VEHICLE_NAME = nil
-			return
-			-- if I lost the robot (maybe the robot is out of range)
+	-- send robots to parent quadcopter 
+	if parentIndex[getSelfIDS()] ~= nil then
+		setVelocity(0,0,1)
+		local robotsDataNST = makeRobotInfoDataNST(robotsRT) -- NST means a table of number or string
+		sendCMD(parentIndex[getSelfIDS()], "robotsInfo", robotsDataNST)
+	end
+
+	if parentIndex[getSelfIDS()] == nil then
+		print("I am parent, I got:")
+		for i, v in ipairs(robotsRT) do
+			print("\t", i, v.idS, v.locV.x, v.locV.y, v.dirN)
 		end
-	end end -- two ends of STATE == "recruting" and "driving"
+	end
 end
 
 -------------------------------------------------------------------
@@ -91,14 +69,15 @@ function destroy()
 	-- put your code here
 end
 
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 --   Customize Functions
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------
 function setRobotVelocity(id, x,y)
-	local bytes = tableToBytes(id, robot.id , "setspeed", {x,y})
+	local bytes = tableToBytes(id, getSelfIDS(), "setspeed", {x,y})
 	robot.radios["radio_0"].tx_data(bytes)
 end
 
+--[[
 -------------------------------------------------------------------
 function getCMD()
 	for i, rxBytesBT in pairs(getReceivedDataTableBT()) do	-- byte table
@@ -112,10 +91,11 @@ end
 function sendCMD(toidS, cmdS, txDataNT)
 	local txBytesBT = tableToBytes(toidS, 
 	                               getSelfIDS(), 
-                                   cmdS,
-                                   txDataNT)
+	                               cmdS,
+	                               txDataNT)
 	transData(txBytesBT)
 end
+--]]
 
 -------------------------------------------------------------------
 -- get boxes
@@ -153,7 +133,11 @@ function getRobotsRT()
 			-- loc (0,0) in the middle, x+ right, y+ up , 
 			-- dir from 0 to 360, x+ as 0
 
-		robotsRT[i] = {locV = locV, dirN = dirN, idS = idS}
+		robotsRT[i] = {locV = locV, 
+		               dirN = dirN, 
+		               idS = idS, 
+		               parent = getSelfIDS(),
+		              }
 		robotsRT[idS] = robotsRT[i]
 	end
 	return robotsRT
@@ -175,6 +159,37 @@ function getRobotInfo(tagT)
 	return locV, degN, idS
 end
 
+function makeRobotInfoDataNST(robotsRT)
+	-- robotsRT is a table of {locV, dirN, idS}
+	local dataNST = {}
+	dataNST[1] = #robotsRT	-- a table of number or String
+	local i = 2
+	for _, v in ipairs(robotsRT) do
+		dataNST[i] = v.idS
+		dataNST[i+1] = v.locV.x
+		dataNST[i+2] = v.locV.y
+		dataNST[i+3] = v.dirN
+		dataNST[i+4] = v.parent
+		i = i + 5
+	end
+	return dataNST
+end
+
+function bindRobotInfoDataRT(dataNST)
+	local n = dataNST[1]
+	local robotsRT = {}
+	local i = 2
+	for j = 1, n do
+		robotsRT[j] = {}
+		robotsRT[j].idS = dataNST[i]
+		robotsRT[j].locV = {x = dataNST[i+1],
+		                    y = dataNST[i+2]}
+		robotsRT[j].dirN = dataNST[i+3]
+		robotsRT[j].parent = dataNST[i+4]
+		i = i + 5
+	end
+	return robotsRT
+end
 -------------------------------------------------------------------
 -- calculations
 -------------------------------------------------------------------
@@ -202,11 +217,34 @@ function getTargetBoxV(robotLocV, boxesVT)
 			local cosN = (-robotLocV.x * relativeV.x - robotLocV.y * relativeV.y) / 
 			             lRelN / lRobN
 			if cosN > 0.9 and lRobN > lRelN then
-				return boxV
+				print(i,"box out and with right direction")
+				return boxV, nil
 			end
+		else
+			print(i,"box in position")
+			return nil, nil
 		end
 	end
-	return nil
+	for i, boxV in ipairs(boxesVT) do
+		-- relative is the vector from robot to box
+		local relativeV = {x = boxV.x - robotLocV.x,
+		                   y = boxV.y - robotLocV.y,}
+		local lRelN = math.sqrt(relativeV.x * relativeV.x +
+		                        relativeV.y * relativeV.y )
+		local relativeV3 = Vec3:create(relativeV.x, relativeV.y, 0)
+		local centerV3 = Vec3:create(-robotLocV.x, -robotLocV.y, 0)
+		local dirV3 = relativeV3 * centerV3
+		local dirN = 1
+		if dirV3.z > 0 then -- box is on the right
+			dirN = 2
+		end
+		if lRelN < 50 then
+			print(i,"test1")
+			return nil, dirN	-- TODO: check left or right
+		end
+	end
+	print(i,"test2")
+	return nil, nil
 end
 
 -------------------------------------------------------------------
@@ -256,6 +294,56 @@ function calcDir(center, target)
 		deg = deg + 360
 	end
 	return deg
+end
+
+--------------------------------------------------------------------
+function joinReceivedRobotsRT(robotsRT, receivedRobotsRT)
+	-- find a common robot
+	local paraT = {} -- rotation and translation parameters
+	for i, vR in ipairs(receivedRobotsRT) do
+		if robotsRT[vR.idS] ~= nil then
+			local thN = robotsRT[vR.idS].dirN - vR.dirN
+			local thRadN = thN * math.pi / 180
+			paraT.x = vR.locV.x * math.cos(thRadN) - 
+			          vR.locV.y * math.sin(thRadN)
+			paraT.y = vR.locV.x * math.sin(thRadN) + 
+			          vR.locV.y * math.cos(thRadN)
+				-- new location of received after rotation
+			paraT.x = robotsRT[vR.idS].locV.x - paraT.x
+			paraT.y = robotsRT[vR.idS].locV.y - paraT.y
+				-- translation vector
+			paraT.thN = thN
+
+			--break?
+		end
+	end
+
+	if paraT.thN == nil then
+		print("no overlapping robot, can't join")
+	else
+		local thN = paraT.thN
+		local thRadN = thN * math.pi / 180
+		local nRobots = #robotsRT
+		for i, vR in ipairs(receivedRobotsRT) do
+			-- calc and add into robotsRT
+			if robotsRT[vR.idS] == nil then
+				nRobots = nRobots + 1
+				robotsRT[nRobots] = {}
+				robotsRT[nRobots].locV = {
+					x = vR.locV.x * math.cos(thRadN) - 
+					    vR.locV.y * math.sin(thRadN) + paraT.x,
+					y = vR.locV.x * math.sin(thRadN) + 
+					    vR.locV.y * math.cos(thRadN) + paraT.y,
+				}
+				robotsRT[nRobots].idS = vR.idS
+				robotsRT[nRobots].parent = vR.parent
+				robotsRT[nRobots].dirN = (vR.dirN + thN) % 360  
+					-- it should still be inside range [0,360]
+				robotsRT[vR.idS] = robotsRT[nRobots]
+			end
+		end
+	end
+	return robotsRT, paraT
 end
 
 ----------------------------------------------------------------------------------
