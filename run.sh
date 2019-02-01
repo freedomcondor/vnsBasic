@@ -5,5 +5,5 @@ if [ "$ARGOS_PLUGIN_PATH" == "" ]; then
 	echo "sourcing"
 	source $argosBuildDir/setup_env.sh
 fi
-$argosBuildDir/core/argos3 -c experiment2.argos
+$argosBuildDir/core/argos3 -c experiment.argos
 

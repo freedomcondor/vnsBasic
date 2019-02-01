@@ -3,13 +3,14 @@
 --   zhuweixu_harry@126.com
 --
 --   version 1.1 : some problems in create from 2 vecs are detected and marked
+--   version 2   : create default from rotation, use createHardValue for hard set
 --]]
 local Vec3 = require("Vector3")
 
-local Quaternion = {CLASS = "Quaternion"}
+local Quaternion = {CLASS = "Quaternion", CLASSQUATERNION = true}
 Quaternion.__index = Quaternion
 
-function Quaternion:create(x,y,z,w)
+function Quaternion:createFromHardValue(x,y,z,w)
 	local instance = {}
 	setmetatable(instance,self)
 	self.__index = self
@@ -19,10 +20,10 @@ function Quaternion:create(x,y,z,w)
 		instance.w = y
 		return instance
 	end
-	if 	type(x) == "number" and 
-		type(y) == "number" and
-		type(z) == "number" and
-		type(w) == "number" then
+	if type(x) == "number" and 
+	   type(y) == "number" and
+	   type(z) == "number" and
+	   type(w) == "number" then
 		instance.v = Vec3:create(x,y,z)
 		instance.w = w
 		return instance
@@ -33,6 +34,7 @@ function Quaternion:create(x,y,z,w)
 	return instance;
 end
 
+--[[  abandon this function
 function Quaternion:createFrom4Vecs(_abc_o,_pqr_o,_abc,_pqr)
 	-- give 4 vectors, rotation from the from the first two to last two
 	-- some problem for specific situation
@@ -54,38 +56,39 @@ function Quaternion:createFrom4Vecs(_abc_o,_pqr_o,_abc,_pqr)
 	axis = rot_o * rot_d
 	local th = math.acos(cos)
 
-	local quater = self:createFromRotation(axis,th)
+	local quater = self:create(axis,th)
 	return quater
 end
+--]]
 
-function Quaternion:createFromRotation(x,y,z,th)
+function Quaternion:create(x,y,z,th)	-- create from rotation
 	local halfth
 	local v
 	if type(x) == "table" and x.CLASS == "Vector3" and x:len() ~= 0 then
 		halfth = y / 2
 		v = x / x:len()
 		v = x:nor()
-		return self:create(v * math.sin(halfth),math.cos(halfth))
+		return self:createFromHardValue(v * math.sin(halfth),math.cos(halfth))
 	end
-	if 	type(x) == "number" and
-		type(y) == "number" and
-		type(z) == "number" and
-		type(th) == "number" and
-		(x ~=0 or y ~= 0 or z ~= 0)then
+	if type(x) == "number" and
+	   type(y) == "number" and
+	   type(z) == "number" and
+	   type(th) == "number" and
+	   (x ~=0 or y ~= 0 or z ~= 0)then
 		halfth = th / 2
 		v = Vec3:create(x,y,z)
 		v = v:nor()
-		return self:create(v * math.sin(halfth),math.cos(halfth))
+		return self:createFromHardValue(v * math.sin(halfth),math.cos(halfth))
 	end
-	return self:create(0,0,0,0)
+	return self:createFromHardValue(0,0,0,0)
 end
 
 function Quaternion.__add(a,b)
-	return Quaternion:create(a.v + b.v,a.w + b.w)
+	return Quaternion:createFromHardValue(a.v + b.v,a.w + b.w)
 end
 
 function Quaternion.__unm(b)
-	return Quaternion:create(-b.v,-b.w)
+	return Quaternion:createFromHardValue(-b.v,-b.w)
 end
 
 function Quaternion.__sub(a,b)
@@ -96,7 +99,7 @@ end
 function Quaternion.__mul(a,b)
 	local tv = a.v * b.v + a.w * b.v + a.v * b.w
 	local tw = a.w * b.w - a.v ^ b.v
-	return Quaternion:create(tv,tw)
+	return Quaternion:createFromHardValue(tv,tw)
 end
 
 function Quaternion:squlen()
@@ -110,9 +113,9 @@ end
 --inverse
 function Quaternion:inv()
 	if self:len() ~= 0 then
-		return Quaternion:create(-self.v/self:len(),self.w/self:len())
+		return Quaternion:createFromHardValue(-self.v/self:len(),self.w/self:len())
 	end
-	return Quaternion:create(0,0,0,0)
+	return Quaternion:createFromHardValue(0,0,0,0)
 end
 
 function Quaternion:__tostring()
@@ -128,7 +131,7 @@ function Quaternion:toRotate(a)
 	end
 	if type(a) == "table" and a.CLASS == "Vector3" then
 		---[[
-		local p = Quaternion:create(a,0)
+		local p = Quaternion:createFromHardValue(a,0)
 		local res = self * p
 		res = res * self:inv()
 		local b = Vec3:create(res.v)
