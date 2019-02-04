@@ -18,7 +18,6 @@ end
 -------------------------------------------------------------------
 function step()
 	-- detect boxes into boxesVT[i]
-	--local boxPos_vt = getBoxesVT()	
 	local boxesVT = getBoxesVT()	
 		-- V means vector = {x,y}
 
