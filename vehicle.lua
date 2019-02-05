@@ -4,7 +4,7 @@
 
 require("PackageInterface")
 local State = require("StateMachine")
-require("debugger")
+--require("debugger")
 
 ------------------------------------------------------------------------
 --   State Machine
@@ -121,6 +121,7 @@ stateMachine = State:create{
 --   ARGoS Functions
 ------------------------------------------------------------------------
 function init()
+	setTag(getSelfIDS())
 	reset()
 end
 
