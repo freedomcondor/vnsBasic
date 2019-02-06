@@ -15,6 +15,7 @@ stateMachine = State:create{
 	substates = {
 	-- randomwalk --------------------
 		randomWalk = State:create{
+			enterMethod = function() print(getPrintTabs(), "random") end,
 			transMethod = function(fdata, data, para)
 				local cmdListCT = getCMDListCT()		
 					--CT:  cmd array, cmd:{fromIDS,cmdS, dataNST}
@@ -50,7 +51,7 @@ stateMachine = State:create{
 	-- beingDriven -------------------
 		beingDriven = State:create{
 			data = {lostCountN = 0,},
-			enterMethod = function() setSpeed(0, 0) print(getSelfIDS(), ": I am recruited") end,
+			enterMethod = function() setSpeed(0, 0) print(getPrintTabs(), "driven") end,
 			transMethod = function(fdata, data, para)
 				local cmdListCT = getCMDListCT()		
 					--CT:  cmd array, cmd:{fromIDS,cmdS, dataNST}
@@ -62,7 +63,8 @@ stateMachine = State:create{
 						noCMD = false
 					elseif cmdC.cmdS == "dismiss" and cmdC.fromIDS == fdata.parentID then
 						fdata.parentID = nil
-						return "randomwalk"
+						print(getPrintTabs(), "disfdr")
+						return "randomWalk"
 					elseif cmdC.cmdS == "turnBySelf" and cmdC.fromIDS == fdata.parentID then
 						fdata.turnDir = cmdC.dataNST[1]
 						return "turnBySelf"
@@ -70,8 +72,8 @@ stateMachine = State:create{
 				end
 				if noCMD == true then
 					-- I didn't get a valid command when I should be
-					data.countN = data.countN + 1
-					if data.countN > 3 then
+					data.lostCountN = data.lostCountN + 1
+					if data.lostCountN > 3 then
 						-- lost
 						return "randomWalk"
 					end
@@ -83,11 +85,13 @@ stateMachine = State:create{
 	-- end of beingDriven ------------
 	-- turnBySelf --------------------
 		turnBySelf = State:create{
+			data = {lostCountN = 0,},
 			enterMethod = function(fdata, data, para)
+				print(getPrintTabs(), "t " .. fdata.turnDir)
 				if     fdata.turnDir == "left"  then turnLeft()
 		        elseif fdata.turnDir == "right" then turnRight() end
 			end,
-			transMethod = function()
+			transMethod = function(fdata, data, para)
 				if objFront() == false then goFront() end
 				local cmdListCT = getCMDListCT()		
 				local noCMD = true
@@ -98,18 +102,20 @@ stateMachine = State:create{
 						return "beingDriven"
 					elseif cmdC.cmdS == "dismiss" and cmdC.fromIDS == fdata.parentID then
 						fdata.parentID = nil
-						return "randomwalk"
+						print(getPrintTabs(), "disftur")
+						return "randomWalk"
 					end
 				end
 				if noCMD == true then
 					-- I didn't get a valid command when I should be
-					data.countN = data.countN + 1
-					if data.countN > 3 then
+					data.lostCountN = data.lostCountN + 1
+					if data.lostCountN > 3 then
 						-- lost
+						print(getPrintTabs(), "lost")
 						return "randomWalk"
 					end
 				else
-					data.countN = 0
+					data.lostCountN = 0
 				end
 			end,
 		},
@@ -142,6 +148,29 @@ end
 ------------------------------------------------------------------------
 --   Customize Functions
 ------------------------------------------------------------------------
+
+function getPrintTabs()
+	local num = nil
+	if getSelfIDS() == "vehicle0" then num = 0
+	elseif getSelfIDS() == "vehicle1" then num = 1
+	elseif getSelfIDS() == "vehicle2" then num = 2
+	elseif getSelfIDS() == "vehicle3" then num = 3
+	elseif getSelfIDS() == "vehicle4" then num = 4
+	elseif getSelfIDS() == "vehicle5" then num = 5
+	elseif getSelfIDS() == "vehicle6" then num = 6
+	elseif getSelfIDS() == "vehicle7" then num = 7
+	elseif getSelfIDS() == "vehicle8" then num = 8
+	elseif getSelfIDS() == "vehicle9" then num = 9
+	elseif getSelfIDS() == "vehicle10" then num = 10
+	elseif getSelfIDS() == "vehicle11" then num = 11
+	end
+
+	str = ""
+	for i = 1, num do
+		str = str .. "\t\t"
+	end
+	return str
+end
 
 -- motion control --
 local baseSpeedN = 10

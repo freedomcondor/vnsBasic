@@ -1,8 +1,15 @@
 ------------------------------------------------------------------------
 --   Global Variables
 ------------------------------------------------------------------------
+
+--[[ for Q1V1 system
 local STATE = "recruiting"
 local CHILDNAME = nil
+--]]
+
+local STATE = {}
+local LAST_ROBOTS = {}
+local CURRENT_ROBOTS = {}
 
 require("PackageInterface")
 --require("debugger")
@@ -24,29 +31,114 @@ function step()
 	local robotsRT = getRobotsRT()
 		-- R for robot = {locV, dirN, idS}
 	
+	--[[
+	print("boxes:")
+	for i, boxV in pairs(boxesVT) do
+		print("\t", i, boxV.x, boxV.y)
+	end
+
+	print("robots:")
+	for i, robotR in pairs(robotsRT) do
+		print("\t", i, robotR.idS, robotR.locV.x, robotR.locV.y, robotR.dirN)
+	end
+	--]]
+	
+	for i, robotR in ipairs(robotsRT) do
+		-- record vehicle for next step
+		-- LAST_ROBOTS to find out who was in last step but not in current step
+		LAST_ROBOTS[robotR.idS] = nil
+		CURRENT_ROBOTS[robotR.idS] = true
+
+		if STATE[robotR.idS] == nil then
+			-- new robot
+			STATE[robotR.idS] = "recruiting"
+		end
+		if STATE[robotR.idS] == "recruiting" then
+			local targetBoxV = getPushingBoxV(robotR.locV, boxesVT, 100, 0.9)
+			if targetBoxV ~= nil then
+				sendCMD(robotR.idS, "recruit")
+				STATE[robotR.idS] = "driving"
+			end
+		elseif STATE[robotR.idS] == "driving" then
+			local targetBoxV, _, targetDirS = getPushingBoxV(robotR.locV, boxesVT, 100, 0.8)
+			if targetBoxV == nil and targetDirS == nil then
+				-- i don't have a box to push
+				sendCMD(robotR.idS, "dismiss")
+				STATE[robotR.idS] = "recruiting"
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is out of angle, I need to turn
+				sendCMD(robotR.idS, "turnBySelf", {targetDirS})
+				STATE[robotR.idS] = "turning"
+			else
+				-- drive
+				local dirRobottoBoxN = calcDir(robotR.locV, targetBoxV)
+				local difN = dirRobottoBoxN - robotR.dirN
+				while difN > 180 do difN = difN - 360 end
+				while difN < -180 do difN = difN + 360 end
+
+				local baseSpeedN = 5
+				if difN > 10 or difN < -10 then
+					if (difN > 0) then
+						setRobotVelocity(robotR.idS, -baseSpeedN, baseSpeedN)
+					else
+						setRobotVelocity(robotR.idS, baseSpeedN, -baseSpeedN)
+					end
+				else
+					setRobotVelocity(robotR.idS, baseSpeedN, baseSpeedN)
+				end
+			end
+		elseif STATE[robotR.idS] == "turning" then
+			local targetBoxV, _, targetDirS = getPushingBoxV(robotR.locV, boxesVT, 40, 0.9)
+			if targetBoxV == nil and targetDirS == nil then
+				-- i don't have a box to push
+				sendCMD(robotR.idS, "dismiss")
+				STATE[robotR.idS] = "recruiting"
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is still out of angle, keep turning
+				sendCMD(robotR.idS, "keepgoing")
+			elseif targetBoxV ~= nil then
+				sendCMD(robotR.idS, "beingDriven")
+				STATE[robotR.idS] = "driving"
+			end
+		end
+	end
+	
+	-- find untracked vehicle
+	for i, v in pairs(LAST_ROBOTS) do
+		STATE[i] = nil
+	end
+	LAST_ROBOTS = CURRENT_ROBOTS
+	CURRENT_ROBOTS = {}
+
+
+	--[[ for Q1V1 system
 	if STATE == "recruiting" then
-		local targetRobotR = getTargetRobotandBox(robotsRT, boxesVT, 0.9)
+		local targetRobotR = getTargetRobotandBox(robotsRT, boxesVT, 100, 0.9)
 		if targetRobotR ~= nil then
 			sendCMD(targetRobotR.idS, "recruit")
 			STATE = "driving"
 			CHILDNAME = targetRobotR.idS
 			return -- end this step
 		end
-	elseif STATE = "driving" then
+	elseif STATE == "driving" then
 		local childRobotR = robotsRT[CHILDNAME]
 		if childRobotR == nil then
 			-- if I lost the robot (maybe the robot is out of range)
 			STATE = "recruiting"
-			SON_VEHICLE_NAME = nil
+			CHILDNAME = nil
 			return
 		else
 			-- I have the vehicle, drive it towards the box
-			local targetBoxV = getPushingBoxV(childRobotR.locV, boxesVT, 0.8)
-			if targetBoxV == nil then
+			local targetBoxV, _, targetDirS = getPushingBoxV(childRobotR.locV, boxesVT, 100, 0.8)
+			if targetBoxV == nil and targetDirS == nil then
 				-- i don't have a box to push
 				sendCMD(childRobotR.idS, "dismiss")
 				STATE = "recruiting"
 				CHILDNAME = nil
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is out of angle, I need to turn
+				sendCMD(childRobotR.idS, "turnBySelf", {targetDirS})
+				STATE = "turning"
 			else
 				-- drive
 				local dirRobottoBoxN = calcDir(childRobotR.locV, targetBoxV)
@@ -54,7 +146,7 @@ function step()
 				while difN > 180 do difN = difN - 360 end
 				while difN < -180 do difN = difN + 360 end
 
-				local baseSpeedN = 7
+				local baseSpeedN = 5
 				if difN > 10 or difN < -10 then
 					if (difN > 0) then
 						setRobotVelocity(childRobotR.idS, -baseSpeedN, baseSpeedN)
@@ -66,18 +158,31 @@ function step()
 				end
 			end
 		end
-	elseif STATE = "turning" then
+	elseif STATE == "turning" then
+		local childRobotR = robotsRT[CHILDNAME]
+		if childRobotR == nil then
+			-- if I lost the robot (maybe the robot is out of range)
+			STATE = "recruiting"
+			CHILDNAME = nil
+			return
+		else
+			-- I have the vehicle, check if it is good to keep driving
+			local targetBoxV, _, targetDirS = getPushingBoxV(childRobotR.locV, boxesVT, 40, 0.9)
+			if targetBoxV == nil and targetDirS == nil then
+				-- i don't have a box to push
+				sendCMD(childRobotR.idS, "dismiss")
+				STATE = "recruiting"
+				CHILDNAME = nil
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is still out of angle, keep turning
+				sendCMD(childRobotR.idS, "keepgoing")
+			elseif targetBoxV ~= nil then
+				sendCMD(childRobotR.idS, "beingDriven")
+				STATE = "driving"
+			end
+		end
 	end
-	
-	print("boxes:")
-	for i, boxV in pairs(boxesVT) do
-		print("\t", i, boxV.x, boxV.y)
-	end
-
-	print("robots:")
-	for i, robotR in pairs(robotsRT) do
-		print("\t", i, robotR.idS, robotR.locV.x, robotR.locV.y, robotR.dirN)
-	end
+	--]]
 end
 
 -------------------------------------------------------------------
@@ -97,13 +202,13 @@ function setRobotVelocity(id, x,y)
 end
 
 -- calc ----------------------------------
-function getTargetRobotandBox(robotsRT, boxesVT, thresholdN)
+function getTargetRobotandBox(robotsRT, boxesVT, disThreshold, angleThresholdN)
 	local targetRobotR = nil
 	local targetBoxV = nil
-	local targetDisN = 999999999999 -- distance between robot to box
+	local targetDisN = disThreshold -- distance between robot to box
 	for i, robotR in ipairs(robotsRT) do
-		local boxV, disN = getPushingBoxV(robotR.locV, boxesVT, thresholdN)
-		if disN < targetDisN then
+		local boxV, disN = getPushingBoxV(robotR.locV, boxesVT,  disThreshold, angleThresholdN)
+		if boxV ~= nil and disN < targetDisN then
 			targetRobotR = robotR
 			targetBoxV = boxV
 			targetDisN = disN
@@ -112,42 +217,50 @@ function getTargetRobotandBox(robotsRT, boxesVT, thresholdN)
 	return targetRobotR, targetBoxV
 end
 
-function getPushingBoxV(robotLocV, boxesVT, thresholdN)
+function getPushingBoxV(robotLocV, boxesVT, disThresholdN, angleThresholdN)
 -- this function finds the nearest box from boxes array for a robot to push based on:
--- if the box is outside the center zone (5000 length)
+-- if the box is outside the center zone (70 length)
 -- if the angle between the robot to the center (0,0)
 --              and     the robot to the box
---        is small enough (cos >0.9)
+--        is small enough (cos > angleThreshold)
 -- if the box is towards inside not outside
 -- then return the box location
 -- if no such box, return nil
 	local targetBoxV = nil
-	local targetDisN = 99999999999
-	local disRobottoCenter = math.sqrt(robotLocV.x * robotLocV.x +
+	local targetDisN = disThresholdN -- distance between robot to box
+		-- can also serve a threshold
+	local targetDirS = nil
+	local disRobottoCenterN = math.sqrt(robotLocV.x * robotLocV.x +
 	                                   robotLocV.y * robotLocV.y )
 	for i, boxV in ipairs(boxesVT) do
-		local disBoxtoCenterN = boxV.x * boxV.x + boxV.y * boxV.y
+		local disBoxtoCenterN = math.sqrt(boxV.x * boxV.x + boxV.y * boxV.y)
 
-		if disBoxtoCenterN > 5000 then -- else continue
+		if disBoxtoCenterN > 70 then -- else continue 
+			-- find all the outsider box
+		if disRobottoCenterN > disBoxtoCenterN then -- else continue 
+			-- robot is outside of the box
 
-		local vecRobottoBox = {x = boxV.x - robotLocV.x,
-		                       y = boxV.y - robotLocV.y,}
-		local disRobottoBox = math.sqrt(vecRobottoBox.x * vecRobottoBox.x +
-			                                vecRobottoBox.y * vecRobottoBox.y )
+		local vecRobottoBoxV = {x = boxV.x - robotLocV.x,
+		                        y = boxV.y - robotLocV.y,}
+		local disRobottoBoxN = math.sqrt(vecRobottoBoxV.x * vecRobottoBoxV.x +
+		                                 vecRobottoBoxV.y * vecRobottoBoxV.y )
 
-		if disRobottoBox < targetDisN then -- else continue
+		if disRobottoBoxN < targetDisN then -- else continue -- find the nearest one
 
-		local cosN = (-robotLocV.x * vecRobottoBox.x - robotLocV.y * vecRobottoBox.y) / 
-		             (disRobottoBox * disRobottoCenter)
+		local cosN = (-robotLocV.x * vecRobottoBoxV.x - robotLocV.y * vecRobottoBoxV.y) / 
+		             (disRobottoBoxN * disRobottoCenterN)
 
-		--if cosN > 0.9 and disRobottoCenter > disRobottoBox then -- else continue
-		if cosN > thresholdN and disRobottoCenter > disRobottoBox then -- else continue
-
-		targetBoxV = boxV
-		targetDisN = disRobottoBox
-		end end end
+		if cosN > angleThresholdN then -- else continue
+			targetBoxV = boxV
+			targetDisN = disRobottoBoxN
+		else
+			-- check box is to the left or right
+			local y = (-vecRobottoBoxV.x * (-robotLocV.y) + vecRobottoBoxV.y * (-robotLocV.x))
+			if y > 0 then targetDirS = "left"
+			         else targetDirS = "right" end
+		end end end end
 	end
-	return targetBoxV, targetDisN
+	return targetBoxV, targetDisN, targetDirS
 end
 
 -- see boxes and robots ------------------
