@@ -5,7 +5,6 @@
   <!-- * General configuration * -->
   <!-- ************************* -->
   <framework>
-    <!--experiment length="0" ticks_per_second="25" random_seed="324646"/-->
     <experiment length="0" ticks_per_second="25" random_seed="1"/>
   </framework>
 
@@ -46,7 +45,7 @@
         <cameras implementation="default" show_frustum="true">
           <camera id="fixed_camera" range="0.01:0.5" resolution="640,480"
                   anchor="body" position="0,0,-0.01" orientation="0,0,180"
-                  focal_length="300,300" principle_point="320,240">
+                  focal_length="400,400" principle_point="320,240">
             <led_detector medium="leds" show_rays="false"/>
             <tag_detector medium="apriltags" show_rays="false"/>
           </camera>
@@ -182,8 +181,9 @@
     </prototype>
 
     <!-->
+    <-->
     <prototype id="quadcopter1" movable="false">
-      <body position="0,0.2,0.37" orientation="0,0,0" />
+      <body position="0,0.2,0.5" orientation="0,0,0" />
       <controller config="quadcopter_controller"/>
       <links ref="axis0">
         <link id="axis0" geometry="sphere" radius="0" mass="0.001"
@@ -215,11 +215,11 @@
         </radios>
       </devices>
     </prototype>
-    <-->
 
     <!-->
+    <-->
     <prototype id="quadcopter2" movable="false">
-      <body position="0,-0.2,0.37" orientation="0,0,0" />
+      <body position="0,-0.2,0.5" orientation="0,0,0" />
       <controller config="quadcopter_controller"/>
       <links ref="axis0">
         <link id="axis0" geometry="sphere" radius="0" mass="0.001"
@@ -251,7 +251,6 @@
         </radios>
       </devices>
     </prototype>
-    <-->
 
     <!-->
     <prototype id="quadcopter3" movable="false">

@@ -73,7 +73,7 @@ stateMachine = State:create{
 				if noCMD == true then
 					-- I didn't get a valid command when I should be
 					data.lostCountN = data.lostCountN + 1
-					if data.lostCountN > 3 then
+					if data.lostCountN > 0 then
 						-- lost
 						return "randomWalk"
 					end
@@ -109,7 +109,7 @@ stateMachine = State:create{
 				if noCMD == true then
 					-- I didn't get a valid command when I should be
 					data.lostCountN = data.lostCountN + 1
-					if data.lostCountN > 3 then
+					if data.lostCountN > 0 then
 						-- lost
 						print(getPrintTabs(), "lost")
 						return "randomWalk"
@@ -163,6 +163,10 @@ function getPrintTabs()
 	elseif getSelfIDS() == "vehicle9" then num = 9
 	elseif getSelfIDS() == "vehicle10" then num = 10
 	elseif getSelfIDS() == "vehicle11" then num = 11
+	elseif getSelfIDS() == "vehicle12" then num = 12
+	elseif getSelfIDS() == "vehicle13" then num = 13
+	elseif getSelfIDS() == "vehicle14" then num = 14
+	elseif getSelfIDS() == "vehicle15" then num = 15
 	end
 
 	str = ""
