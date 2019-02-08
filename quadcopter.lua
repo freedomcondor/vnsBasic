@@ -59,12 +59,12 @@ function step()
 		return -- return step
 	end
 
+	--[[
 	print("boxes:")
 	for i, boxV in pairs(boxesVT) do
 		print("\t", i, boxV.x, boxV.y)
 	end
 
-	--[[
 	print("robots:")
 	for i, robotR in pairs(robotsRT) do
 		print("\t", i, robotR.idS, robotR.locV.x, robotR.locV.y, robotR.dirN)
@@ -104,7 +104,7 @@ function step()
 				while difN > 180 do difN = difN - 360 end
 				while difN < -180 do difN = difN + 360 end
 
-				local baseSpeedN = 5
+				local baseSpeedN = 10
 				if difN > 10 or difN < -10 then
 					if (difN > 0) then
 						setRobotVelocity(robotR.idS, -baseSpeedN, baseSpeedN)
@@ -116,7 +116,7 @@ function step()
 				end
 			end
 		elseif STATE[robotR.idS] == "turning" then
-			local targetBoxV, _, targetDirS = getPushingBoxV(robotR.locV, boxesVT, 40, 0.9)
+			local targetBoxV, _, targetDirS = getPushingBoxV(robotR.locV, boxesVT, 100, 0.9)
 			if targetBoxV == nil and targetDirS == nil then
 				-- i don't have a box to push
 				sendCMD(robotR.idS, "dismiss")

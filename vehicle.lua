@@ -177,7 +177,7 @@ function getPrintTabs()
 end
 
 -- motion control --
-local baseSpeedN = 10
+local baseSpeedN = 20
 function standStill()
 	setSpeed(0, 0)
 end
