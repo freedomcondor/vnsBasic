@@ -29,7 +29,7 @@
         <radios implementation="default" show_rays="false"/>
         <proximity implementation="default" show_rays="true"/>
       </sensors>
-      <params script="vehicle.lua" />
+      <params script="vehicle_share_clustering.lua" />
     </lua_controller>
 
     <lua_controller id="quadcopter_controller">
@@ -42,9 +42,6 @@
         </joints>
       </actuators>
       <sensors>
-        <joints implementation="default">
-          <joint id="axis2_body" mode="position"/>
-        </joints>
         <cameras implementation="default" show_frustum="true">
           <camera id="fixed_camera" range="0.01:0.5" resolution="640,480"
                   anchor="body" position="0,0,-0.01" orientation="0,0,180"
@@ -55,7 +52,7 @@
         </cameras>
         <radios implementation="default" show_rays="false"/>
       </sensors>
-      <params script="quadcopter.lua" />
+      <params script="quadcopter_share_clustering.lua" />
     </lua_controller>
 
   </controllers>
@@ -83,7 +80,7 @@
     <distribute>
       <position method="uniform" min="-0.4,-0.4,0" max="0.4,0.4,0" />
       <orientation method="uniform" min="0,0,0" max="360,0,0" />
-      <entity quantity="1" max_trials="100">
+      <entity quantity="10" max_trials="100">
         <prototype id="vehicle" movable="true">
           <body position="0,0,0" orientation="0,0,0" />
           <controller config="vehicle_controller"/>
@@ -220,6 +217,7 @@
     </prototype>
 
     <!-->
+    <-->
     <prototype id="quadcopter2" movable="false">
       <body position="0,-0.2,0.5" orientation="0,0,0" />
       <controller config="quadcopter_controller"/>
@@ -253,7 +251,6 @@
         </radios>
       </devices>
     </prototype>
-    <-->
 
     <!-->
     <prototype id="quadcopter3" movable="false">
@@ -297,7 +294,7 @@
     <distribute>
       <position method="uniform" min="-0.3,-0.3,0" max="0.3,0.3,0" />
       <orientation method="uniform" min="0,0,0" max="360,0,0" />
-      <entity quantity="0" max_trials="100">
+      <entity quantity="10" max_trials="100">
         <box id="b0" size="0.04,0.04,0.02" movable="true" mass="0.05">
           <leds medium="leds">
             <led color="red" anchor="origin" offset="0,0,0.021"/>

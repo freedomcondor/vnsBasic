@@ -5,6 +5,11 @@
 require("PackageInterface")
 --require("debugger")
 
+--[[ for Q1V1 system
+local STATE = "recruiting"
+local CHILDNAME = nil
+--]]
+
 local STATE = {}
 local LAST_ROBOTS = {}
 local CURRENT_ROBOTS = {}
@@ -46,11 +51,6 @@ function step()
 				joinReceivedVisionRTVTT(robotsRT, boxesVT, receivedRobotsRT, receivedBoxesVT)
 		end
 	end
-
-	local turn = 5--math.random() * 20 - 10
-	local baseSpeed = 20
-	setVelocity(0, 0, turn)
-	--[[
 	-- send robots to parent quadcopter 
 	if parentIndex[getSelfIDS()] ~= nil then
 		setVelocity(0,0,1)
@@ -58,7 +58,6 @@ function step()
 		sendCMD(parentIndex[getSelfIDS()], "VisionInfo", VisionDataNST)
 		return -- return step
 	end
-	--]]
 
 	--[[
 	print("boxes:")
@@ -72,7 +71,6 @@ function step()
 	end
 	--]]
 	
-	--[[
 	for i, robotR in ipairs(robotsRT) do
 		-- record vehicle for next step
 		-- LAST_ROBOTS to find out who was in last step but not in current step
@@ -139,6 +137,79 @@ function step()
 	end
 	LAST_ROBOTS = CURRENT_ROBOTS
 	CURRENT_ROBOTS = {}
+
+
+	--[[ for Q1V1 system
+	if STATE == "recruiting" then
+		local targetRobotR = getTargetRobotandBox(robotsRT, boxesVT, 100, 0.9)
+		if targetRobotR ~= nil then
+			sendCMD(targetRobotR.idS, "recruit")
+			STATE = "driving"
+			CHILDNAME = targetRobotR.idS
+			return -- end this step
+		end
+	elseif STATE == "driving" then
+		local childRobotR = robotsRT[CHILDNAME]
+		if childRobotR == nil then
+			-- if I lost the robot (maybe the robot is out of range)
+			STATE = "recruiting"
+			CHILDNAME = nil
+			return
+		else
+			-- I have the vehicle, drive it towards the box
+			local targetBoxV, _, targetDirS = getPushingBoxV(childRobotR.locV, boxesVT, 100, 0.8)
+			if targetBoxV == nil and targetDirS == nil then
+				-- i don't have a box to push
+				sendCMD(childRobotR.idS, "dismiss")
+				STATE = "recruiting"
+				CHILDNAME = nil
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is out of angle, I need to turn
+				sendCMD(childRobotR.idS, "turnBySelf", {targetDirS})
+				STATE = "turning"
+			else
+				-- drive
+				local dirRobottoBoxN = calcDir(childRobotR.locV, targetBoxV)
+				local difN = dirRobottoBoxN - childRobotR.dirN
+				while difN > 180 do difN = difN - 360 end
+				while difN < -180 do difN = difN + 360 end
+
+				local baseSpeedN = 5
+				if difN > 10 or difN < -10 then
+					if (difN > 0) then
+						setRobotVelocity(childRobotR.idS, -baseSpeedN, baseSpeedN)
+					else
+						setRobotVelocity(childRobotR.idS, baseSpeedN, -baseSpeedN)
+					end
+				else
+					setRobotVelocity(childRobotR.idS, baseSpeedN, baseSpeedN)
+				end
+			end
+		end
+	elseif STATE == "turning" then
+		local childRobotR = robotsRT[CHILDNAME]
+		if childRobotR == nil then
+			-- if I lost the robot (maybe the robot is out of range)
+			STATE = "recruiting"
+			CHILDNAME = nil
+			return
+		else
+			-- I have the vehicle, check if it is good to keep driving
+			local targetBoxV, _, targetDirS = getPushingBoxV(childRobotR.locV, boxesVT, 40, 0.9)
+			if targetBoxV == nil and targetDirS == nil then
+				-- i don't have a box to push
+				sendCMD(childRobotR.idS, "dismiss")
+				STATE = "recruiting"
+				CHILDNAME = nil
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is still out of angle, keep turning
+				sendCMD(childRobotR.idS, "keepgoing")
+			elseif targetBoxV ~= nil then
+				sendCMD(childRobotR.idS, "beingDriven")
+				STATE = "driving"
+			end
+		end
+	end
 	--]]
 end
 
