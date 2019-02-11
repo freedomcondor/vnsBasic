@@ -47,9 +47,9 @@ function step()
 		end
 	end
 
-	local turn = 5--math.random() * 20 - 10
-	local baseSpeed = 20
-	setVelocity(0, 0, turn)
+	local turn = (math.random() - 0.5) * 50
+	local speedN = 0.2
+	setVelocity(speedN, 0, turn)
 	--[[
 	-- send robots to parent quadcopter 
 	if parentIndex[getSelfIDS()] ~= nil then
@@ -431,9 +431,13 @@ end
 ----------------------------------------------------------------------------------
 --   Lua Interface
 ----------------------------------------------------------------------------------
-function setVelocity(x,y,theta)
-	robot.joints.axis0_axis1.set_target(x)
-	robot.joints.axis1_axis2.set_target(y)
+function setVelocity(x,y,theta)	
+	--quadcopter heading is the x+ axis
+	local thRad = robot.joints.axis2_body.encoder
+	local xWorld = x * math.cos(thRad) - y * math.sin(thRad)
+	local yWorld = x * math.sin(thRad) + y * math.cos(thRad)
+	robot.joints.axis0_axis1.set_target(xWorld)
+	robot.joints.axis1_axis2.set_target(yWorld)
 	robot.joints.axis2_body.set_target(theta)
 end
 

@@ -36,8 +36,8 @@
       <actuators>
         <radios implementation="default"/>
         <joints implementation="default">
-          <joint id="axis0_axis1" mode="velocity" max_impulse="0.001"/>
-          <joint id="axis1_axis2" mode="velocity" max_impulse="0.001"/>
+          <joint id="axis0_axis1" mode="velocity" max_impulse="0.011"/>
+          <joint id="axis1_axis2" mode="velocity" max_impulse="0.011"/>
           <joint id="axis2_body" mode="velocity" max_impulse="0.001"/>
         </joints>
       </actuators>
@@ -186,7 +186,7 @@
     <!-->
     <-->
     <prototype id="quadcopter1" movable="false">
-      <body position="0,0.2,0.5" orientation="0,0,0" />
+      <body position="0,0,0.5" orientation="0,0,0" />
       <controller config="quadcopter_controller"/>
       <links ref="axis0">
         <link id="axis0" geometry="sphere" radius="0" mass="0.001"
