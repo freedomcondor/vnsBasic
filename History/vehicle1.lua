@@ -11,14 +11,19 @@ local State = require("StateMachine")
 ----------------------------------------------------------------------------------
 
 stateMachine = State:create{
-	data = {turnBySelfDir = nil},
+	data = {turnBySelfDir = nil,
+	        parentS = nil,},
 	initial = "randomWalk",
 	substates = 
 	{
 		randomWalk = State:create{
+			enterMethod = function(fdata, data, para)
+				fdata.parentS = nil
+			end,
 			transMethod = function(fdata, data, para)
-				local fromidS, cmdS, rxNumbersNT = getCMD()
+				local fromidS, cmdS, rxNumbersNT = getCMD()	--TODO: make it cmdlist
 				if cmdS == "recruit" then
+					fdata.parentS = fromidS
 					return "beingDriven"
 				end
 
@@ -57,9 +62,12 @@ stateMachine = State:create{
 			data = {countN = 0},
 			enterMethod = function() setSpeed(0, 0) print(getSelfIDS(), ": I am recruited") end,
 			transMethod = function(fdata, data, para)
-				local fromidS, cmdS, rxNumbersNT = getCMD()
+				local fromidS, cmdS, rxNumbersNT = getCMD() -- TODO: make it get list
 				if cmdS == "setspeed" then
 					setSpeed(rxNumbersNT[1], rxNumbersNT[2])
+				end
+				if cmdS == "recruit" then
+					sendCMD(fromidS, "deny", {fdata.parentS})
 				end
 				if cmdS == "dismiss" then
 					print(getSelfIDS(), ": I am dismissed")
@@ -140,6 +148,7 @@ stateMachine = State:create{
 --   ARGoS Functions
 ----------------------------------------------------------------------------------
 function init()
+	math.randomseed(1)
 	setTag(getSelfIDS())
 	reset()
 end

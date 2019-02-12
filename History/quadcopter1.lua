@@ -12,6 +12,7 @@ local sonRobots = {} -- recruitedVehicles["iamid"] = true
 --   ARGoS Functions
 ----------------------------------------------------------------------------------
 function init()
+	math.randomseed(1)
 	reset()
 end
 
@@ -26,6 +27,8 @@ function step()
 	local robotsRT = getRobotsRT()
 		-- R for robot = {locV, dirN, idS}
 
+	-- get cmd, check deny
+	-- TODO:
 	
 	for i, vehicleR in ipairs(robotsRT) do
 		if sonRobots[vehicleR.idS] == nil then

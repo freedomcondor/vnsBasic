@@ -6,6 +6,7 @@ require("PackageInterface")
 --require("debugger")
 
 local STATE = {}
+	-- STATE[robotName] = "recruit", "drive" ... 
 local LAST_ROBOTS = {}
 local CURRENT_ROBOTS = {}
 
@@ -33,6 +34,7 @@ function step()
 	local robotsRT = getRobotsRT()
 		-- R for robot = {locV, dirN, idS, parent}
 
+	--[[
 	-- receive robots from other quadcopter
 	local cmdListCT = getCMDListCT()  
 		-- CT means CMD Table(array)
@@ -46,9 +48,11 @@ function step()
 				joinReceivedVisionRTVTT(robotsRT, boxesVT, receivedRobotsRT, receivedBoxesVT)
 		end
 	end
+	--]]
 
-	local turn = (math.random() - 0.5) * 50
-	local speedN = 0.2
+	-- fly randomly
+	local turn = (math.random() - 0.5) * 20
+	local speedN = 0.05
 	setVelocity(speedN, 0, turn)
 	--[[
 	-- send robots to parent quadcopter 
@@ -72,7 +76,6 @@ function step()
 	end
 	--]]
 	
-	--[[
 	for i, robotR in ipairs(robotsRT) do
 		-- record vehicle for next step
 		-- LAST_ROBOTS to find out who was in last step but not in current step
@@ -84,40 +87,33 @@ function step()
 			STATE[robotR.idS] = "recruiting"
 		end
 		if STATE[robotR.idS] == "recruiting" then
-			local targetBoxV = getPushingBoxV(robotR.locV, boxesVT, 100, 0.9)
-			if targetBoxV ~= nil then
-				sendCMD(robotR.idS, "recruit")
-				STATE[robotR.idS] = "driving"
-			end
+			sendCMD(robotR.idS, "recruit")
+			STATE[robotR.idS] = "driving"
 		elseif STATE[robotR.idS] == "driving" then
-			local targetBoxV, _, targetDirS = getPushingBoxV(robotR.locV, boxesVT, 100, 0.7)
-			if targetBoxV == nil and targetDirS == nil then
-				-- i don't have a box to push
-				sendCMD(robotR.idS, "dismiss")
-				STATE[robotR.idS] = "recruiting"
-			elseif targetBoxV == nil and targetDirS ~= nil then
-				-- target box is out of angle, I need to turn
-				sendCMD(robotR.idS, "turnBySelf", {targetDirS})
-				STATE[robotR.idS] = "turning"
-			else
-				-- drive
-				local dirRobottoBoxN = calcDir(robotR.locV, targetBoxV)
-				local difN = dirRobottoBoxN - robotR.dirN
-				while difN > 180 do difN = difN - 360 end
-				while difN < -180 do difN = difN + 360 end
+			-- drive
+			local dirRobottoCenterN = calcDir(robotR.locV, {x = 0, y = 0})
+			local disRobottoCenterN = math.sqrt(robotR.locV.x * robotR.locV.x + 
+			                                    robotR.locV.y * robotR.locV.y)
+			local difN = dirRobottoCenterN - robotR.dirN
+			while difN > 180 do difN = difN - 360 end
+			while difN < -180 do difN = difN + 360 end
 
+			if disRobottoCenterN > 10 then
 				local baseSpeedN = 10
 				if difN > 10 or difN < -10 then
 					if (difN > 0) then
-						setRobotVelocity(robotR.idS, -baseSpeedN, baseSpeedN)
+						setRobotVelocity(robotR.idS, 0, baseSpeedN)
 					else
-						setRobotVelocity(robotR.idS, baseSpeedN, -baseSpeedN)
+						setRobotVelocity(robotR.idS, baseSpeedN, 0)
 					end
 				else
 					setRobotVelocity(robotR.idS, baseSpeedN, baseSpeedN)
 				end
+			else
+				setRobotVelocity(robotR.idS, 0, 0)
 			end
 		elseif STATE[robotR.idS] == "turning" then
+			--[[
 			local targetBoxV, _, targetDirS = getPushingBoxV(robotR.locV, boxesVT, 100, 0.9)
 			if targetBoxV == nil and targetDirS == nil then
 				-- i don't have a box to push
@@ -130,6 +126,7 @@ function step()
 				sendCMD(robotR.idS, "beingDriven")
 				STATE[robotR.idS] = "driving"
 			end
+			--]]
 		end
 	end
 	
@@ -139,7 +136,6 @@ function step()
 	end
 	LAST_ROBOTS = CURRENT_ROBOTS
 	CURRENT_ROBOTS = {}
-	--]]
 end
 
 -------------------------------------------------------------------
