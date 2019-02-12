@@ -10,13 +10,7 @@ local STATE = {}
 local LAST_ROBOTS = {}
 local CURRENT_ROBOTS = {}
 
-local parentIndex = {
-	quadcopter0 = nil,
-	quadcopter1 = "quadcopter0",
-	quadcopter2 = "quadcopter0",
-	--quadcopter3 = "quadcopter1",
-}
-local transParaIndex = {}
+local parentQuacopter = nil
 
 ------------------------------------------------------------------------
 --   ARGoS Functions
@@ -34,35 +28,21 @@ function step()
 	local robotsRT = getRobotsRT()
 		-- R for robot = {locV, dirN, idS, parent}
 
-	--[[
 	-- receive robots from other quadcopter
 	local cmdListCT = getCMDListCT()  
 		-- CT means CMD Table(array)
 		-- a cmd contains: {cmdS, fromIDS, dataNST}
 	for i, cmdC in ipairs(cmdListCT) do
 		if cmdC.cmdS == "VisionInfo" then
+			setVelocity(0, 0, 0)
 			local receivedRobotsRT, receivedBoxesVT = 
 				bindVisionInfoDataRT(cmdC.dataNST)
 
-			robotsRT, boxesVT, transParaIndex[cmdC.fromIDS] = 
+			--robotsRT, boxesVT, transParaIndex[cmdC.fromIDS] = 
+			robotsRT, boxesVT = 
 				joinReceivedVisionRTVTT(robotsRT, boxesVT, receivedRobotsRT, receivedBoxesVT)
 		end
 	end
-	--]]
-
-	-- fly randomly
-	local turn = (math.random() - 0.5) * 20
-	local speedN = 0.05
-	setVelocity(speedN, 0, turn)
-	--[[
-	-- send robots to parent quadcopter 
-	if parentIndex[getSelfIDS()] ~= nil then
-		setVelocity(0,0,1)
-		local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) -- NST means a table of number or string
-		sendCMD(parentIndex[getSelfIDS()], "VisionInfo", VisionDataNST)
-		return -- return step
-	end
-	--]]
 
 	--[[
 	print("boxes:")
@@ -75,6 +55,30 @@ function step()
 		print("\t", i, robotR.idS, robotR.locV.x, robotR.locV.y, robotR.dirN)
 	end
 	--]]
+
+	-- check deny
+	for i, cmdC in ipairs(cmdListCT) do
+		if cmdC.cmdS == "deny" then
+			STATE[cmdC.fromIDS] = nil
+			parentQuacopter = cmdC.dataNST[1]
+		end
+	end
+
+	if parentQuacopter ~= nil then
+		-- send robots to parent quadcopter 
+		local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) -- NST means a table of number or string
+		sendCMD(parentQuacopter, "VisionInfo", VisionDataNST)
+		setVelocity(0, 0, 0)
+		return -- return step
+	end
+	-- else I am a brain
+
+	-- fly randomly
+	if getSelfIDS() ~= "quadcopter0" then
+		local turn = (math.random() - 0.5) * 20
+		local speedN = 0.05
+		setVelocity(speedN, 0, turn)
+	end
 	
 	for i, robotR in ipairs(robotsRT) do
 		-- record vehicle for next step
@@ -87,7 +91,7 @@ function step()
 			STATE[robotR.idS] = "recruiting"
 		end
 		if STATE[robotR.idS] == "recruiting" then
-			sendCMD(robotR.idS, "recruit")
+			sendCMD(robotR.idS, "recruit", {math.random()})
 			STATE[robotR.idS] = "driving"
 		elseif STATE[robotR.idS] == "driving" then
 			-- drive
