@@ -15,8 +15,8 @@
     <lua_controller id="vehicle_controller">
       <actuators>
         <joints implementation="default">
-          <joint id="base_wheel_left" mode="velocity" max_impulse="0.005"/>
-          <joint id="base_wheel_right" mode="velocity" max_impulse="0.005"/>
+          <joint id="base_wheel_left" mode="velocity" max_impulse="0.015"/>
+          <joint id="base_wheel_right" mode="velocity" max_impulse="0.015"/>
         </joints>
         <radios implementation="default"/>
         <tags implementation="default"/>
@@ -46,11 +46,11 @@
           <joint id="axis2_body" mode="position"/>
         </joints>
         <cameras implementation="default" show_frustum="true">
-          <camera id="fixed_camera" range="0.01:0.5" resolution="640,480"
+          <camera id="fixed_camera" range="0.01:0.48" resolution="640,480"
                   anchor="body" position="0,0,-0.01" orientation="0,0,180"
                   focal_length="500,500" principle_point="320,240">
             <led_detector medium="leds" show_rays="false"/>
-            <tag_detector medium="apriltags" show_rays="false"/>
+            <tag_detector medium="apriltags" show_rays="true"/>
           </camera>
         </cameras>
         <radios implementation="default" show_rays="false"/>
@@ -163,11 +163,11 @@
               position="0,0,0" orientation="0,0,0" />
       </links>
       <joints>
-        <joint id="axis0_axis1" type="prismatic" axis="1,0,0" limit="-0.45:0.45">
+        <joint id="axis0_axis1" type="prismatic" axis="1,0,0" limit="-0.8:0.1">
           <parent link="axis0" position="0,0,0" orientation="0,0,0"/>
           <child link="axis1" position="0,0,0" orientation="0,0,0"/>
         </joint>
-        <joint id="axis1_axis2" type="prismatic" axis="0,1,0" limit="-0.45:0.45">
+        <joint id="axis1_axis2" type="prismatic" axis="0,1,0" limit="-0.8:0.1">
           <parent link="axis1" position="0,0,0" orientation="0,0,0"/>
           <child link="axis2" position="0,0,0" orientation="0,0,0"/>
         </joint>

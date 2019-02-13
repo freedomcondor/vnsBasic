@@ -60,6 +60,7 @@ function step()
 	for i, cmdC in ipairs(cmdListCT) do
 		if cmdC.cmdS == "deny" then
 			STATE[cmdC.fromIDS] = nil
+			-- TODO: dismiss every vehicle
 			parentQuacopter = cmdC.dataNST[1]
 		end
 	end
@@ -74,11 +75,11 @@ function step()
 	-- else I am a brain
 
 	-- fly randomly
-	if getSelfIDS() ~= "quadcopter0" then
+	--if getSelfIDS() ~= "quadcopter0" then
 		local turn = (math.random() - 0.5) * 20
 		local speedN = 0.05
 		setVelocity(speedN, 0, turn)
-	end
+	--end
 	
 	for i, robotR in ipairs(robotsRT) do
 		-- record vehicle for next step
@@ -103,7 +104,7 @@ function step()
 			while difN < -180 do difN = difN + 360 end
 
 			if disRobottoCenterN > 10 then
-				local baseSpeedN = 10
+				local baseSpeedN = 20
 				if difN > 10 or difN < -10 then
 					if (difN > 0) then
 						setRobotVelocity(robotR.idS, 0, baseSpeedN)
