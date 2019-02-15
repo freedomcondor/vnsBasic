@@ -19,27 +19,11 @@ stateMachine = State:create{
 			transMethod = function(fdata, data, para)
 				local cmdListCT = getCMDListCT()		
 					--CT:  cmd array, cmd:{fromIDS,cmdS, dataNST}
-				-- find the max number of recruits
-				local maxRecruit = -1
-				local hasRecruit = false
 				for i, cmdC in ipairs(cmdListCT) do
 					if cmdC.cmdS == "recruit" then
-						hasRecruit = true
-						if cmdC.dataNST[1] > maxRecruit then
-							fdata.parentID = cmdC.fromIDS
-							maxRecruit = cmdC.dataNST[1] 
-						end
+						fdata.parentID = cmdC.fromIDS
+						return "beingDriven"
 					end
-				end
-				-- deny all other recruits 
-				for i, cmdC in ipairs(cmdListCT) do -- TODO: two recruits
-					if cmdC.cmdS == "recruit" and 
-					   cmdC.fromIDS ~= fdata.parentID then
-						sendCMD(cmdC.fromIDS, "deny", {fdata.parentID})
-					end
-				end
-				if hasRecruit == true then
-					return "beingDriven"
 				end
 			end,
 			initial = "straight",
@@ -84,8 +68,6 @@ stateMachine = State:create{
 					elseif cmdC.cmdS == "turnBySelf" and cmdC.fromIDS == fdata.parentID then
 						fdata.turnDir = cmdC.dataNST[1]
 						return "turnBySelf"
-					elseif cmdC.cmdS == "recruit" then
-						sendCMD(cmdC.fromIDS, "deny", {fdata.parentID})
 					end
 				end
 				if noCMD == true then
@@ -122,8 +104,6 @@ stateMachine = State:create{
 						fdata.parentID = nil
 						print(getPrintTabs(), "disftur")
 						return "randomWalk"
-					elseif cmdC.cmdS == "recruit" then
-						sendCMD(cmdC.fromIDS, "deny", {fdata.parentID})
 					end
 				end
 				if noCMD == true then
