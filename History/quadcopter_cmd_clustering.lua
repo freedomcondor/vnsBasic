@@ -2,16 +2,27 @@
 --   Global Variables
 ------------------------------------------------------------------------
 
+local State = require("StateMachine") -- for table copy
 require("PackageInterface")
-local Vec3 = require("math/Vector3")
 --require("debugger")
 
+--[[ for Q1V1 system
+local STATE = "recruiting"
+local CHILDNAME = nil
+--]]
+
 local STATE = {}
-	-- STATE[robotName] = "recruit", "drive" ... 
 local LAST_ROBOTS = {}
 local CURRENT_ROBOTS = {}
 
-local parentQuacopter = nil
+local parentIndex = {
+	quadcopter0 = nil,
+	quadcopter1 = "quadcopter0",
+	quadcopter2 = "quadcopter0",
+	--quadcopter3 = "quadcopter1",
+}
+local transParaIndex = {}
+local centerV = {x = 0, y = 0,}
 
 ------------------------------------------------------------------------
 --   ARGoS Functions
@@ -29,23 +40,50 @@ function step()
 	local robotsRT = getRobotsRT()
 		-- R for robot = {locV, dirN, idS, parent}
 
-	-- receive robots from other quadcopter
+	-- receive cmds from others
 	local cmdListCT = getCMDListCT()  
 		-- CT means CMD Table(array)
 		-- a cmd contains: {cmdS, fromIDS, dataNST}
-	local beReported = false
 	for i, cmdC in ipairs(cmdListCT) do
 		if cmdC.cmdS == "VisionInfo" then
 			local receivedRobotsRT, receivedBoxesVT = 
 				bindVisionInfoDataRT(cmdC.dataNST)
 
 			--robotsRT, boxesVT, transParaIndex[cmdC.fromIDS] = 
-			robotsRT, boxesVT = 
-				joinReceivedVisionRTVTT(robotsRT, boxesVT, receivedRobotsRT, receivedBoxesVT)
+			_, _, transParaIndex[cmdC.fromIDS] =
+				joinReceivedVisionRTVTT(tableCopy(robotsRT), tableCopy(boxesVT), receivedRobotsRT, receivedBoxesVT)
 
-			beReported = true
+			-- tell him the rally point
+			if transParaIndex[cmdC.fromIDS].thN ~= nil then
+				local thN = transParaIndex[cmdC.fromIDS].thN
+				local thRadN = thN * math.pi / 180
+				local newRallyV = {
+					x =  (centerV.x - transParaIndex[cmdC.fromIDS].x) * math.cos(thRadN)
+					    +(centerV.y - transParaIndex[cmdC.fromIDS].y) * math.sin(thRadN),
+					y = -(centerV.x - transParaIndex[cmdC.fromIDS].x) * math.sin(thRadN) 
+					    +(centerV.y - transParaIndex[cmdC.fromIDS].y) * math.cos(thRadN), 
+				}
+				sendCMD(cmdC.fromIDS, "rallypoint", {newRallyV.x, newRallyV.y})
+			end
+		elseif cmdC.cmdS == "rallypoint" then
+			centerV.x = cmdC.dataNST[1]
+			centerV.y = cmdC.dataNST[2]
+		elseif cmdC.cmdS == "deny" then
+			STATE[cmdC.fromIDS] = nil
 		end
 	end
+
+	-- send robots to parent quadcopter 
+	if parentIndex[getSelfIDS()] ~= nil then
+		setVelocity(0,0,1)
+		local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) -- NST means a table of number or string
+		sendCMD(parentIndex[getSelfIDS()], "VisionInfo", VisionDataNST)
+		--return -- return step
+	else
+		return -- return step
+	end
+
+	-- receive denis
 
 	--[[
 	print("boxes:")
@@ -58,45 +96,6 @@ function step()
 		print("\t", i, robotR.idS, robotR.locV.x, robotR.locV.y, robotR.dirN)
 	end
 	--]]
-
-	-- check deny
-	for i, cmdC in ipairs(cmdListCT) do
-		if cmdC.cmdS == "deny" then
-			STATE[cmdC.fromIDS] = nil
-			-- TODO: dismiss every vehicle
-			parentQuacopter = cmdC.dataNST[1]
-		end
-	end
-
-	if parentQuacopter ~= nil then
-		-- send robots to parent quadcopter 
-		local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) -- NST means a table of number or string
-		sendCMD(parentQuacopter, "VisionInfo", VisionDataNST)
-		for i, robotR in pairs(robotsRT) do
-			setRobotVelocity(robotR.idS, 0, 0)
-		end
-		setVelocity(0, 0, 0)
-		return -- return step
-	elseif beReported == true then
-		-- I don't have a parent, but I have some report to me, 
-		-- I am a brain of at least two
-		
-		print("I am ", getSelfIDS())
-		for i, robotR in pairs(robotsRT) do
-			print("\t", i, robotR.idS, robotR.locV.x, robotR.locV.y, robotR.dirN)
-			setRobotVelocity(robotR.idS, 0, 0)
-		end
-
-		setVelocity(0, 0, 0)
-		return -- return step
-	end
-	-- else I am single
-
-	-- fly randomly
-	local turn = (math.random() - 0.5) * 5
-	local speedLN = (math.random() - 0.5) * 2.00
-	local speedRN = (math.random() - 0.5) * 2.00
-	setVelocity(speedLN, speedRN, turn)
 	
 	for i, robotR in ipairs(robotsRT) do
 		-- record vehicle for next step
@@ -109,30 +108,51 @@ function step()
 			STATE[robotR.idS] = "recruiting"
 		end
 		if STATE[robotR.idS] == "recruiting" then
-			sendCMD(robotR.idS, "recruit", {math.random()})
-			STATE[robotR.idS] = "driving"
+			local targetBoxV = getPushingBoxV(centerV, robotR.locV, boxesVT, 100, 0.9)
+			if targetBoxV ~= nil then
+				sendCMD(robotR.idS, "recruit", {math.random()})
+				STATE[robotR.idS] = "driving"
+			end
 		elseif STATE[robotR.idS] == "driving" then
-			-- drive
-			local fluxVectorV = calcFlux(robotR.locV, robotsRT)
-			local disFluxN = math.sqrt(fluxVectorV.x * fluxVectorV.x + 
-			                           fluxVectorV.y * fluxVectorV.y)
-			fluxVectorV.x = fluxVectorV.x + robotR.locV.x
-			fluxVectorV.y = fluxVectorV.y + robotR.locV.y
-			dirRobottoBoxN = calcDir(robotR.locV, fluxVectorV)
-
-			local difN = dirRobottoBoxN - robotR.dirN
-			while difN > 180 do difN = difN - 360 end
-			while difN < -180 do difN = difN + 360 end
-
-			local baseSpeedN = 15
-			if difN > 10 or difN < -10 then
-				if (difN > 0) then
-					setRobotVelocity(robotR.idS, 0, baseSpeedN)
-				else
-					setRobotVelocity(robotR.idS, baseSpeedN, 0)
-				end
+			local targetBoxV, _, targetDirS = getPushingBoxV(centerV, robotR.locV, boxesVT, 100, 0.7)
+			if targetBoxV == nil and targetDirS == nil then
+				-- i don't have a box to push
+				sendCMD(robotR.idS, "dismiss")
+				STATE[robotR.idS] = "recruiting"
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is out of angle, I need to turn
+				sendCMD(robotR.idS, "turnBySelf", {targetDirS})
+				STATE[robotR.idS] = "turning"
 			else
-				setRobotVelocity(robotR.idS, baseSpeedN * 4, baseSpeedN * 4)
+				-- drive
+				local dirRobottoBoxN = calcDir(robotR.locV, targetBoxV)
+				local difN = dirRobottoBoxN - robotR.dirN
+				while difN > 180 do difN = difN - 360 end
+				while difN < -180 do difN = difN + 360 end
+
+				local baseSpeedN = 10
+				if difN > 10 or difN < -10 then
+					if (difN > 0) then
+						setRobotVelocity(robotR.idS, -baseSpeedN, baseSpeedN)
+					else
+						setRobotVelocity(robotR.idS, baseSpeedN, -baseSpeedN)
+					end
+				else
+					setRobotVelocity(robotR.idS, baseSpeedN, baseSpeedN)
+				end
+			end
+		elseif STATE[robotR.idS] == "turning" then
+			local targetBoxV, _, targetDirS = getPushingBoxV(centerV, robotR.locV, boxesVT, 100, 0.9)
+			if targetBoxV == nil and targetDirS == nil then
+				-- i don't have a box to push
+				sendCMD(robotR.idS, "dismiss")
+				STATE[robotR.idS] = "recruiting"
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is still out of angle, keep turning
+				sendCMD(robotR.idS, "keepgoing")
+			elseif targetBoxV ~= nil then
+				sendCMD(robotR.idS, "beingDriven")
+				STATE[robotR.idS] = "driving"
 			end
 		end
 	end
@@ -162,53 +182,7 @@ function setRobotVelocity(id, x,y)
 end
 
 -- calc ----------------------------------
-function calcFlux(focalPosV, robotsRT)
-	local length = 100
-	local focalPosV3 = Vec3:create(focalPosV.x, focalPosV.y, 0)
-	local points = {
-		Vec3:create(-length, -length, 0),
-		--Vec3:create( 0,      -length, 0),
-		Vec3:create( length, -length, 0),
-
-		--Vec3:create(-length,  0,      0),
-		--Vec3:create( length,  0,      0),
-
-		Vec3:create(-length,  length, 0),
-		--Vec3:create( 0,       length, 0),
-		Vec3:create( length,  length, 0),
-	}
-
-	local flux = Vec3:create(0, 0, 0)
-	for i, pointV3 in ipairs(points) do
-		local RV3 = focalPosV3 - pointV3
-		flux = flux - RV3:nor() / (RV3:len())
-	end
-
-	for id, robotR in ipairs(robotsRT) do
-		local otherRV3 = Vec3:create(robotR.locV.x, robotR.locV.y, 0)
-		local RV3 = focalPosV3 - otherRV3
-		flux = flux + 1.1 * RV3:nor() / (RV3:len() )
-	end
-
-	return flux
-end
-
-function getTargetRobotandBox(robotsRT, boxesVT, disThreshold, angleThresholdN)
-	local targetRobotR = nil
-	local targetBoxV = nil
-	local targetDisN = disThreshold -- distance between robot to box
-	for i, robotR in ipairs(robotsRT) do
-		local boxV, disN = getPushingBoxV(robotR.locV, boxesVT,  disThreshold, angleThresholdN)
-		if boxV ~= nil and disN < targetDisN then
-			targetRobotR = robotR
-			targetBoxV = boxV
-			targetDisN = disN
-		end
-	end
-	return targetRobotR, targetBoxV
-end
-
-function getPushingBoxV(robotLocV, boxesVT, disThresholdN, angleThresholdN)
+function getPushingBoxV(centerV, robotLocV, boxesVT, disThresholdN, angleThresholdN)
 -- this function finds the nearest box from boxes array for a robot to push based on:
 -- if the box is outside the center zone (70 length)
 -- if the angle between the robot to the center (0,0)
@@ -221,10 +195,15 @@ function getPushingBoxV(robotLocV, boxesVT, disThresholdN, angleThresholdN)
 	local targetDisN = disThresholdN -- distance between robot to box
 		-- can also serve a threshold
 	local targetDirS = nil
-	local disRobottoCenterN = math.sqrt(robotLocV.x * robotLocV.x +
-	                                   robotLocV.y * robotLocV.y )
+	local vecRobottoCenterV = {x = centerV.x - robotLocV.x,
+	                           y = centerV.y - robotLocV.y,}
+	local disRobottoCenterN = math.sqrt(vecRobottoCenterV.x * vecRobottoCenterV.x +
+	                                    vecRobottoCenterV.y * vecRobottoCenterV.y )
 	for i, boxV in ipairs(boxesVT) do
-		local disBoxtoCenterN = math.sqrt(boxV.x * boxV.x + boxV.y * boxV.y)
+		local vecBoxtoCenterN = {x = centerV.x - boxV.x,
+		                         y = centerV.y - boxV.y,}
+		local disBoxtoCenterN = math.sqrt(vecBoxtoCenterN.x * vecBoxtoCenterN.x + 
+		                                  vecBoxtoCenterN.y * vecBoxtoCenterN.y)
 
 		if disBoxtoCenterN > 70 then -- else continue 
 			-- find all the outsider box
@@ -238,7 +217,7 @@ function getPushingBoxV(robotLocV, boxesVT, disThresholdN, angleThresholdN)
 
 		if disRobottoBoxN < targetDisN then -- else continue -- find the nearest one
 
-		local cosN = (-robotLocV.x * vecRobottoBoxV.x - robotLocV.y * vecRobottoBoxV.y) / 
+		local cosN = (vecRobottoCenterV.x * vecRobottoBoxV.x + vecRobottoCenterV.y * vecRobottoBoxV.y) / 
 		             (disRobottoBoxN * disRobottoCenterN)
 
 		if cosN > angleThresholdN then -- else continue
@@ -246,7 +225,7 @@ function getPushingBoxV(robotLocV, boxesVT, disThresholdN, angleThresholdN)
 			targetDisN = disRobottoBoxN
 		else
 			-- check box is to the left or right
-			local y = (-vecRobottoBoxV.x * (-robotLocV.y) + vecRobottoBoxV.y * (-robotLocV.x))
+			local y = (-vecRobottoBoxV.x * vecRobottoCenterV.y + vecRobottoBoxV.y * vecRobottoCenterV.x)
 			if y > 0 then targetDirS = "left"
 			         else targetDirS = "right" end
 		end end end end
@@ -465,13 +444,9 @@ end
 ----------------------------------------------------------------------------------
 --   Lua Interface
 ----------------------------------------------------------------------------------
-function setVelocity(x,y,theta)	
-	--quadcopter heading is the x+ axis
-	local thRad = robot.joints.axis2_body.encoder
-	local xWorld = x * math.cos(thRad) - y * math.sin(thRad)
-	local yWorld = x * math.sin(thRad) + y * math.cos(thRad)
-	robot.joints.axis0_axis1.set_target(xWorld)
-	robot.joints.axis1_axis2.set_target(yWorld)
+function setVelocity(x,y,theta)
+	robot.joints.axis0_axis1.set_target(x)
+	robot.joints.axis1_axis2.set_target(y)
 	robot.joints.axis2_body.set_target(theta)
 end
 

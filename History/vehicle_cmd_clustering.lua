@@ -15,7 +15,7 @@ stateMachine = State:create{
 	substates = {
 	-- randomwalk --------------------
 		randomWalk = State:create{
-			enterMethod = function() --[[print(getPrintTabs(), "random")--]] end,
+			enterMethod = function() print(getPrintTabs(), "random") end,
 			transMethod = function(fdata, data, para)
 				local cmdListCT = getCMDListCT()		
 					--CT:  cmd array, cmd:{fromIDS,cmdS, dataNST}
@@ -67,20 +67,19 @@ stateMachine = State:create{
 	-- beingDriven -------------------
 		beingDriven = State:create{
 			data = {lostCountN = 0,},
-			enterMethod = function() setSpeed(0, 0) --[[print(getPrintTabs(), "driven")--]] end,
+			enterMethod = function() setSpeed(0, 0) print(getPrintTabs(), "driven") end,
 			transMethod = function(fdata, data, para)
 				local cmdListCT = getCMDListCT()		
 					--CT:  cmd array, cmd:{fromIDS,cmdS, dataNST}
 				local noCMD = true
 				for i, cmdC in ipairs(cmdListCT) do
-					--if cmdC.cmdS == "setspeed" and cmdC.fromIDS == fdata.parentID then
-					if cmdC.cmdS == "setspeed" then
+					if cmdC.cmdS == "setspeed" and cmdC.fromIDS == fdata.parentID then
 						setSpeed(cmdC.dataNST[1], cmdC.dataNST[2])
 						sendCMD(cmdC.fromIDS, "sensor", getProximityTableNT())
 						noCMD = false
 					elseif cmdC.cmdS == "dismiss" and cmdC.fromIDS == fdata.parentID then
 						fdata.parentID = nil
-						--print(getPrintTabs(), "disfdr")
+						print(getPrintTabs(), "disfdr")
 						return "randomWalk"
 					elseif cmdC.cmdS == "turnBySelf" and cmdC.fromIDS == fdata.parentID then
 						fdata.turnDir = cmdC.dataNST[1]
@@ -106,7 +105,7 @@ stateMachine = State:create{
 		turnBySelf = State:create{
 			data = {lostCountN = 0,},
 			enterMethod = function(fdata, data, para)
-				--print(getPrintTabs(), "t " .. fdata.turnDir)
+				print(getPrintTabs(), "t " .. fdata.turnDir)
 				if     fdata.turnDir == "left"  then turnLeft()
 		        elseif fdata.turnDir == "right" then turnRight() end
 			end,
@@ -121,7 +120,7 @@ stateMachine = State:create{
 						return "beingDriven"
 					elseif cmdC.cmdS == "dismiss" and cmdC.fromIDS == fdata.parentID then
 						fdata.parentID = nil
-						--print(getPrintTabs(), "disftur")
+						print(getPrintTabs(), "disftur")
 						return "randomWalk"
 					elseif cmdC.cmdS == "recruit" then
 						sendCMD(cmdC.fromIDS, "deny", {fdata.parentID})
@@ -132,7 +131,7 @@ stateMachine = State:create{
 					data.lostCountN = data.lostCountN + 1
 					if data.lostCountN > 0 then
 						-- lost
-						--print(getPrintTabs(), "lost")
+						print(getPrintTabs(), "lost")
 						return "randomWalk"
 					end
 				else
@@ -188,21 +187,6 @@ function getPrintTabs()
 	elseif getSelfIDS() == "vehicle13" then num = 13
 	elseif getSelfIDS() == "vehicle14" then num = 14
 	elseif getSelfIDS() == "vehicle15" then num = 15
-	elseif getSelfIDS() == "vehicle16" then num = 16
-	elseif getSelfIDS() == "vehicle17" then num = 17
-	elseif getSelfIDS() == "vehicle18" then num = 18
-	elseif getSelfIDS() == "vehicle19" then num = 19
-	elseif getSelfIDS() == "vehicle20" then num = 20
-	elseif getSelfIDS() == "vehicle21" then num = 21
-	elseif getSelfIDS() == "vehicle22" then num = 22
-	elseif getSelfIDS() == "vehicle23" then num = 23
-	elseif getSelfIDS() == "vehicle24" then num = 24
-	elseif getSelfIDS() == "vehicle25" then num = 25
-	elseif getSelfIDS() == "vehicle26" then num = 26
-	elseif getSelfIDS() == "vehicle27" then num = 27
-	elseif getSelfIDS() == "vehicle28" then num = 28
-	elseif getSelfIDS() == "vehicle29" then num = 29
-	elseif getSelfIDS() == "vehicle30" then num = 30
 	end
 
 	str = ""

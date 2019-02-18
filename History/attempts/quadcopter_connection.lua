@@ -3,7 +3,6 @@
 ------------------------------------------------------------------------
 
 require("PackageInterface")
-local Vec3 = require("math/Vector3")
 --require("debugger")
 
 local STATE = {}
@@ -33,17 +32,15 @@ function step()
 	local cmdListCT = getCMDListCT()  
 		-- CT means CMD Table(array)
 		-- a cmd contains: {cmdS, fromIDS, dataNST}
-	local beReported = false
 	for i, cmdC in ipairs(cmdListCT) do
 		if cmdC.cmdS == "VisionInfo" then
+			setVelocity(0, 0, 0)
 			local receivedRobotsRT, receivedBoxesVT = 
 				bindVisionInfoDataRT(cmdC.dataNST)
 
 			--robotsRT, boxesVT, transParaIndex[cmdC.fromIDS] = 
 			robotsRT, boxesVT = 
 				joinReceivedVisionRTVTT(robotsRT, boxesVT, receivedRobotsRT, receivedBoxesVT)
-
-			beReported = true
 		end
 	end
 
@@ -72,31 +69,17 @@ function step()
 		-- send robots to parent quadcopter 
 		local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) -- NST means a table of number or string
 		sendCMD(parentQuacopter, "VisionInfo", VisionDataNST)
-		for i, robotR in pairs(robotsRT) do
-			setRobotVelocity(robotR.idS, 0, 0)
-		end
-		setVelocity(0, 0, 0)
-		return -- return step
-	elseif beReported == true then
-		-- I don't have a parent, but I have some report to me, 
-		-- I am a brain of at least two
-		
-		print("I am ", getSelfIDS())
-		for i, robotR in pairs(robotsRT) do
-			print("\t", i, robotR.idS, robotR.locV.x, robotR.locV.y, robotR.dirN)
-			setRobotVelocity(robotR.idS, 0, 0)
-		end
-
 		setVelocity(0, 0, 0)
 		return -- return step
 	end
-	-- else I am single
+	-- else I am a brain
 
 	-- fly randomly
-	local turn = (math.random() - 0.5) * 5
-	local speedLN = (math.random() - 0.5) * 2.00
-	local speedRN = (math.random() - 0.5) * 2.00
-	setVelocity(speedLN, speedRN, turn)
+	--if getSelfIDS() ~= "quadcopter0" then
+		local turn = (math.random() - 0.5) * 20
+		local speedN = 0.05
+		setVelocity(speedN, 0, turn)
+	--end
 	
 	for i, robotR in ipairs(robotsRT) do
 		-- record vehicle for next step
@@ -113,27 +96,42 @@ function step()
 			STATE[robotR.idS] = "driving"
 		elseif STATE[robotR.idS] == "driving" then
 			-- drive
-			local fluxVectorV = calcFlux(robotR.locV, robotsRT)
-			local disFluxN = math.sqrt(fluxVectorV.x * fluxVectorV.x + 
-			                           fluxVectorV.y * fluxVectorV.y)
-			fluxVectorV.x = fluxVectorV.x + robotR.locV.x
-			fluxVectorV.y = fluxVectorV.y + robotR.locV.y
-			dirRobottoBoxN = calcDir(robotR.locV, fluxVectorV)
-
-			local difN = dirRobottoBoxN - robotR.dirN
+			local dirRobottoCenterN = calcDir(robotR.locV, {x = 0, y = 0})
+			local disRobottoCenterN = math.sqrt(robotR.locV.x * robotR.locV.x + 
+			                                    robotR.locV.y * robotR.locV.y)
+			local difN = dirRobottoCenterN - robotR.dirN
 			while difN > 180 do difN = difN - 360 end
 			while difN < -180 do difN = difN + 360 end
 
-			local baseSpeedN = 15
-			if difN > 10 or difN < -10 then
-				if (difN > 0) then
-					setRobotVelocity(robotR.idS, 0, baseSpeedN)
+			if disRobottoCenterN > 10 then
+				local baseSpeedN = 20
+				if difN > 10 or difN < -10 then
+					if (difN > 0) then
+						setRobotVelocity(robotR.idS, 0, baseSpeedN)
+					else
+						setRobotVelocity(robotR.idS, baseSpeedN, 0)
+					end
 				else
-					setRobotVelocity(robotR.idS, baseSpeedN, 0)
+					setRobotVelocity(robotR.idS, baseSpeedN, baseSpeedN)
 				end
 			else
-				setRobotVelocity(robotR.idS, baseSpeedN * 4, baseSpeedN * 4)
+				setRobotVelocity(robotR.idS, 0, 0)
 			end
+		elseif STATE[robotR.idS] == "turning" then
+			--[[
+			local targetBoxV, _, targetDirS = getPushingBoxV(robotR.locV, boxesVT, 100, 0.9)
+			if targetBoxV == nil and targetDirS == nil then
+				-- i don't have a box to push
+				sendCMD(robotR.idS, "dismiss")
+				STATE[robotR.idS] = "recruiting"
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is still out of angle, keep turning
+				sendCMD(robotR.idS, "keepgoing")
+			elseif targetBoxV ~= nil then
+				sendCMD(robotR.idS, "beingDriven")
+				STATE[robotR.idS] = "driving"
+			end
+			--]]
 		end
 	end
 	
@@ -162,37 +160,6 @@ function setRobotVelocity(id, x,y)
 end
 
 -- calc ----------------------------------
-function calcFlux(focalPosV, robotsRT)
-	local length = 100
-	local focalPosV3 = Vec3:create(focalPosV.x, focalPosV.y, 0)
-	local points = {
-		Vec3:create(-length, -length, 0),
-		--Vec3:create( 0,      -length, 0),
-		Vec3:create( length, -length, 0),
-
-		--Vec3:create(-length,  0,      0),
-		--Vec3:create( length,  0,      0),
-
-		Vec3:create(-length,  length, 0),
-		--Vec3:create( 0,       length, 0),
-		Vec3:create( length,  length, 0),
-	}
-
-	local flux = Vec3:create(0, 0, 0)
-	for i, pointV3 in ipairs(points) do
-		local RV3 = focalPosV3 - pointV3
-		flux = flux - RV3:nor() / (RV3:len())
-	end
-
-	for id, robotR in ipairs(robotsRT) do
-		local otherRV3 = Vec3:create(robotR.locV.x, robotR.locV.y, 0)
-		local RV3 = focalPosV3 - otherRV3
-		flux = flux + 1.1 * RV3:nor() / (RV3:len() )
-	end
-
-	return flux
-end
-
 function getTargetRobotandBox(robotsRT, boxesVT, disThreshold, angleThresholdN)
 	local targetRobotR = nil
 	local targetBoxV = nil

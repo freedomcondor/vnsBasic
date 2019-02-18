@@ -7,7 +7,8 @@ if [ "$ARGOS_PLUGIN_PATH" == "" ]; then
 fi
 #$argosBuildDir/core/argos3 -c experiment_share_clustering.argos
 #$argosBuildDir/core/argos3 -c experiment_cmd_clustering.argos
-$argosBuildDir/core/argos3 -c experiment_surround.argos
-#$argosBuildDir/core/argos3 -c experiment.argos
+#$argosBuildDir/core/argos3 -c experiment_surround.argos
+#$argosBuildDir/core/argos3 -c experiment_connection.argos
+$argosBuildDir/core/argos3 -c experiment.argos
 			
 

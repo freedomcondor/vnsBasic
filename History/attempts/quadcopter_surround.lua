@@ -6,12 +6,26 @@ require("PackageInterface")
 local Vec3 = require("math/Vector3")
 --require("debugger")
 
+--[[ for Q1V1 system
+local STATE = "recruiting"
+local CHILDNAME = nil
+--]]
+
 local STATE = {}
-	-- STATE[robotName] = "recruit", "drive" ... 
 local LAST_ROBOTS = {}
 local CURRENT_ROBOTS = {}
 
-local parentQuacopter = nil
+--[[
+local parentIndex = {
+	quadcopter0 = nil,
+	quadcopter1 = "quadcopter0",
+	quadcopter2 = "quadcopter0",
+	--quadcopter3 = "quadcopter1",
+}
+local transParaIndex = {}
+--]]
+local drivingRobotsNumberN = 0
+local drivingRobotsRT = {}
 
 ------------------------------------------------------------------------
 --   ARGoS Functions
@@ -29,23 +43,28 @@ function step()
 	local robotsRT = getRobotsRT()
 		-- R for robot = {locV, dirN, idS, parent}
 
+	--[[
 	-- receive robots from other quadcopter
 	local cmdListCT = getCMDListCT()  
 		-- CT means CMD Table(array)
 		-- a cmd contains: {cmdS, fromIDS, dataNST}
-	local beReported = false
 	for i, cmdC in ipairs(cmdListCT) do
 		if cmdC.cmdS == "VisionInfo" then
 			local receivedRobotsRT, receivedBoxesVT = 
 				bindVisionInfoDataRT(cmdC.dataNST)
 
-			--robotsRT, boxesVT, transParaIndex[cmdC.fromIDS] = 
-			robotsRT, boxesVT = 
+			robotsRT, boxesVT, transParaIndex[cmdC.fromIDS] = 
 				joinReceivedVisionRTVTT(robotsRT, boxesVT, receivedRobotsRT, receivedBoxesVT)
-
-			beReported = true
 		end
 	end
+	-- send robots to parent quadcopter 
+	if parentIndex[getSelfIDS()] ~= nil then
+		setVelocity(0,0,1)
+		local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) -- NST means a table of number or string
+		sendCMD(parentIndex[getSelfIDS()], "VisionInfo", VisionDataNST)
+		return -- return step
+	end
+	--]]
 
 	--[[
 	print("boxes:")
@@ -53,50 +72,16 @@ function step()
 		print("\t", i, boxV.x, boxV.y)
 	end
 
-	print("robots:")
 	for i, robotR in pairs(robotsRT) do
 		print("\t", i, robotR.idS, robotR.locV.x, robotR.locV.y, robotR.dirN)
 	end
 	--]]
-
-	-- check deny
-	for i, cmdC in ipairs(cmdListCT) do
-		if cmdC.cmdS == "deny" then
-			STATE[cmdC.fromIDS] = nil
-			-- TODO: dismiss every vehicle
-			parentQuacopter = cmdC.dataNST[1]
-		end
-	end
-
-	if parentQuacopter ~= nil then
-		-- send robots to parent quadcopter 
-		local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) -- NST means a table of number or string
-		sendCMD(parentQuacopter, "VisionInfo", VisionDataNST)
-		for i, robotR in pairs(robotsRT) do
-			setRobotVelocity(robotR.idS, 0, 0)
-		end
-		setVelocity(0, 0, 0)
-		return -- return step
-	elseif beReported == true then
-		-- I don't have a parent, but I have some report to me, 
-		-- I am a brain of at least two
-		
-		print("I am ", getSelfIDS())
-		for i, robotR in pairs(robotsRT) do
-			print("\t", i, robotR.idS, robotR.locV.x, robotR.locV.y, robotR.dirN)
-			setRobotVelocity(robotR.idS, 0, 0)
-		end
-
-		setVelocity(0, 0, 0)
-		return -- return step
-	end
-	-- else I am single
-
-	-- fly randomly
+	
 	local turn = (math.random() - 0.5) * 5
-	local speedLN = (math.random() - 0.5) * 2.00
-	local speedRN = (math.random() - 0.5) * 2.00
+	local speedLN = (math.random() - 0.5) * 5.00
+	local speedRN = (math.random() - 0.5) * 5.00
 	setVelocity(speedLN, speedRN, turn)
+
 	
 	for i, robotR in ipairs(robotsRT) do
 		-- record vehicle for next step
@@ -106,14 +91,19 @@ function step()
 
 		if STATE[robotR.idS] == nil then
 			-- new robot
-			STATE[robotR.idS] = "recruiting"
+			if drivingRobotsNumberN < 4 then
+				STATE[robotR.idS] = "recruiting"
+				drivingRobotsNumberN = drivingRobotsNumberN + 1
+				drivingRobotsRT[robotR.idS] = true
+			end
 		end
 		if STATE[robotR.idS] == "recruiting" then
-			sendCMD(robotR.idS, "recruit", {math.random()})
+			sendCMD(robotR.idS, "recruit")
 			STATE[robotR.idS] = "driving"
 		elseif STATE[robotR.idS] == "driving" then
 			-- drive
-			local fluxVectorV = calcFlux(robotR.locV, robotsRT)
+			local length = 100
+			local fluxVectorV = calcFlux(robotR.locV, drivingRobotsRT, robotsRT)
 			local disFluxN = math.sqrt(fluxVectorV.x * fluxVectorV.x + 
 			                           fluxVectorV.y * fluxVectorV.y)
 			fluxVectorV.x = fluxVectorV.x + robotR.locV.x
@@ -124,22 +114,43 @@ function step()
 			while difN > 180 do difN = difN - 360 end
 			while difN < -180 do difN = difN + 360 end
 
-			local baseSpeedN = 15
-			if difN > 10 or difN < -10 then
-				if (difN > 0) then
-					setRobotVelocity(robotR.idS, 0, baseSpeedN)
+			--if disFluxN < 10 then
+				local baseSpeedN = 10
+				if difN > 10 or difN < -10 then
+					if (difN > 0) then
+						setRobotVelocity(robotR.idS, -baseSpeedN, baseSpeedN)
+					else
+						setRobotVelocity(robotR.idS, baseSpeedN, -baseSpeedN)
+					end
 				else
-					setRobotVelocity(robotR.idS, baseSpeedN, 0)
+					setRobotVelocity(robotR.idS, baseSpeedN * 2, baseSpeedN * 2)
 				end
-			else
-				setRobotVelocity(robotR.idS, baseSpeedN * 4, baseSpeedN * 4)
+			--end
+		--[[
+		elseif STATE[robotR.idS] == "turning" then
+			local targetBoxV, _, targetDirS = getPushingBoxV(robotR.locV, boxesVT, 100, 0.9)
+			if targetBoxV == nil and targetDirS == nil then
+				-- i don't have a box to push
+				sendCMD(robotR.idS, "dismiss")
+				STATE[robotR.idS] = "recruiting"
+			elseif targetBoxV == nil and targetDirS ~= nil then
+				-- target box is still out of angle, keep turning
+				sendCMD(robotR.idS, "keepgoing")
+			elseif targetBoxV ~= nil then
+				sendCMD(robotR.idS, "beingDriven")
+				STATE[robotR.idS] = "driving"
 			end
+		--]]
 		end
 	end
 	
 	-- find untracked vehicle
 	for i, v in pairs(LAST_ROBOTS) do
 		STATE[i] = nil
+		if drivingRobotsRT[i] == true then
+			drivingRobotsRT[i] = nil
+			drivingRobotsNumberN = drivingRobotsNumberN - 1
+		end
 	end
 	LAST_ROBOTS = CURRENT_ROBOTS
 	CURRENT_ROBOTS = {}
@@ -162,7 +173,7 @@ function setRobotVelocity(id, x,y)
 end
 
 -- calc ----------------------------------
-function calcFlux(focalPosV, robotsRT)
+function calcFlux(focalPosV, otherRobotsIndex, robotsRT)
 	local length = 100
 	local focalPosV3 = Vec3:create(focalPosV.x, focalPosV.y, 0)
 	local points = {
@@ -184,10 +195,12 @@ function calcFlux(focalPosV, robotsRT)
 		flux = flux - RV3:nor() / (RV3:len())
 	end
 
-	for id, robotR in ipairs(robotsRT) do
-		local otherRV3 = Vec3:create(robotR.locV.x, robotR.locV.y, 0)
-		local RV3 = focalPosV3 - otherRV3
-		flux = flux + 1.1 * RV3:nor() / (RV3:len() )
+	for id, robotR in pairs(otherRobotsIndex) do
+		if otherRobotsIndex[id] == true and robotsRT[id] ~= nil then
+			local otherRV3 = Vec3:create(robotsRT[id].locV.x, robotsRT[id].locV.y, 0)
+			local RV3 = focalPosV3 - otherRV3
+			flux = flux + 1.1 * RV3:nor() / (RV3:len() )
+		end
 	end
 
 	return flux
@@ -465,13 +478,9 @@ end
 ----------------------------------------------------------------------------------
 --   Lua Interface
 ----------------------------------------------------------------------------------
-function setVelocity(x,y,theta)	
-	--quadcopter heading is the x+ axis
-	local thRad = robot.joints.axis2_body.encoder
-	local xWorld = x * math.cos(thRad) - y * math.sin(thRad)
-	local yWorld = x * math.sin(thRad) + y * math.cos(thRad)
-	robot.joints.axis0_axis1.set_target(xWorld)
-	robot.joints.axis1_axis2.set_target(yWorld)
+function setVelocity(x,y,theta)
+	robot.joints.axis0_axis1.set_target(x)
+	robot.joints.axis1_axis2.set_target(y)
 	robot.joints.axis2_body.set_target(theta)
 end
 
