@@ -20,10 +20,11 @@ function VNS:create(option)
 	setmetatable(instance, self)
 
 	instance.idS = option.idS
-	instance.locV3 = Vec3:create()
-	instance.dirQ = Quaternion:create()
+	instance.locV3 = option.locV3 or Vec3:create()
+	instance.dirQ = option.dirQ or Quaternion:create()
 	instance.typeS = option.typeS
 	instance.roleS = option.roleS
+	instance.state = option.state
 	instance.parentS = option.parentS
 
 	instance.childrenVnsT = {}
