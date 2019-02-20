@@ -55,7 +55,7 @@
         </cameras>
         <radios implementation="default" show_rays="false"/>
       </sensors>
-      <params script="quadcopter.lua" />
+      <params script="quadcopter_back.lua" />
     </lua_controller>
 
   </controllers>
