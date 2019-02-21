@@ -4,7 +4,18 @@
 -- Version 1.0
 -- 		first attempt
 ------------------------------------------------------
-package.path = package.path .. ";math/?.lua"
+function table.getSize(n)
+	if type(n) == "table" then
+		local count = 0
+		for i, v in pairs(n) do
+			count = count + 1
+		end
+		return count
+	else
+		return nil
+	end
+end
+------------------------------------------------------
 Vec3 = require("Vector3")
 Quaternion = require("Quaternion")
 
@@ -20,11 +31,17 @@ function VNS:create(option)
 	setmetatable(instance, self)
 
 	instance.idS = option.idS
-	instance.locV3 = option.locV3 or Vec3:create()
-	instance.dirQ = option.dirQ or Quaternion:create()
+	--instance.locV3 = option.locV3 or Vec3:create()
+	--instance.dirQ = option.dirQ or Quaternion:create()
+	if option.locV == nil then
+		instance.locV = {x = 0, y = 0}
+	else
+		instance.locV = {x = option.locV.x, y = option.locV.y}
+	end
+	instance.dirN = option.dirN or Quaternion:create()
 	instance.typeS = option.typeS
 	instance.roleS = option.roleS
-	instance.state = option.state
+	instance.stateS = option.stateS
 	instance.parentS = option.parentS
 
 	instance.childrenVnsT = {}
@@ -34,7 +51,7 @@ function VNS:create(option)
 	return instance
 end
 
-function VNS:add(_xVns)
+function VNS:add(_xVns, _roleS)
 	if type(_xVns) == "table" and _xVns.CLASSVNS == true then
 		if self.childrenVnsT[_xVns.idS] ~= nil then 
 			print("Warning: double add", _xVns.idS) end
@@ -42,6 +59,9 @@ function VNS:add(_xVns)
 		self.childrenRolesVnsTT.new[_xVns.idS] = _xVns
 		_xVns.parentS = self.idS
 		_xVns.roleS = "new"
+		if _roleS ~= nil then
+			self:changeRole(_xVns.idS, _roleS)
+		end
 	else
 		print("Warning: invalid add")
 	end
@@ -51,7 +71,7 @@ function VNS:remove(idS)
 	if self.childrenVnsT[idS] ~= nil then
 		self.childrenVnsT[idS].parentS = nil
 		self.childrenVnsT[idS] = nil
-		for i, vVnsT in pairs(vns.childrenRolesVnsTT) do
+		for i, vVnsT in pairs(self.childrenRolesVnsTT) do
 			vVnsT[idS] = nil
 		end
 	end

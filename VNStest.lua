@@ -13,8 +13,8 @@ vns3 = VNS:new{
 }
 
 vns:add(vns2)
-vns:add(vns3)
-vns:changeRole("test3","dancer")
+vns:add(vns3, "dancer2")
+--vns:changeRole("test3","dancer")
 --vns:remove("test2")
 
 print("childrenlist:")

@@ -61,20 +61,19 @@ function getCMD()
 end
 
 -- get a cmd list
-function getCMDListCT(x)		--CT:  cmd table(array)
+function getCMDListCT()		--CT:  cmd table(array)
 	local i = 0
 	local listCT = {}
 	for _, rxBytesBT in pairs(getReceivedDataTableBT()) do	-- byte table
 		local toIDS, fromIDS, cmdS, rxNumbersNT = bytesToTable(rxBytesBT)
 		if toIDS == getSelfIDS() then
-		if x == nil or fromIDS == x then
 			i = i + 1
 			listCT[i] = {
 				fromIDS = fromIDS,
 				cmdS = cmdS,
 				dataNST = rxNumbersNT,
 			}
-		end end
+		end
 	end
 
 	return listCT
