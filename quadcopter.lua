@@ -265,7 +265,7 @@ local rallyPointV = {x = 0, y = 0}
 		-- calc fly dir in his perspective
 		local dis = math.sqrt(quadQ.locV.x * quadQ.locV.x + quadQ.locV.y * quadQ.locV.y)
 		local dirV = {}
-		if dis > 450 then
+		if dis > 360 then
 			dirV.x =  (0 - quadQ.locV.x) * math.cos(thRadN)
 			         +(0 - quadQ.locV.y) * math.sin(thRadN)
 			dirV.y = -(0 - quadQ.locV.x) * math.sin(thRadN) 
