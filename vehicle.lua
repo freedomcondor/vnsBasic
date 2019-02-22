@@ -73,8 +73,8 @@ stateMachine = State:create{
 					--CT:  cmd array, cmd:{fromIDS,cmdS, dataNST}
 				local noCMD = true
 				for i, cmdC in ipairs(cmdListCT) do
-					--if cmdC.cmdS == "setspeed" and cmdC.fromIDS == fdata.parentID then
-					if cmdC.cmdS == "setspeed" then
+					if cmdC.cmdS == "setspeed" and cmdC.fromIDS == fdata.parentID then
+					--if cmdC.cmdS == "setspeed" then
 						setSpeed(cmdC.dataNST[1], cmdC.dataNST[2])
 						sendCMD(cmdC.fromIDS, "sensor", getProximityTableNT())
 						noCMD = false

@@ -4,6 +4,7 @@
 
 package.path = package.path .. ";math/?.lua"
 require("PackageInterface")
+local State = require("StateMachine")
 local Vec3 = require("math/Vector3")
 local Quaternion = require("math/Quaternion")
 local VNS = require("VNS")
@@ -23,16 +24,17 @@ function reset()
 	vns = VNS:new{
 		id = getSelfIDS(),
 		typeS = "quadcopter",
-		state = "wandering",
+		stateS = "wandering",
 	}
 	vns.childrenRolesVnsTT.marking = {}
 	vns.childrenRolesVnsTT.driving = {}
+	vns.childrenRolesVnsTT.quads = {}
 	vns.childrenRolesVnsTT.waitingAnswer= {}
+	vns.childrenRolesVnsTT.deny = {}
 end
 
 -------------------------------------------------------------------
 function step()
-
 -- see the world -------------------------------------
 
 	local robotsRT = getRobotsRT()
@@ -65,8 +67,8 @@ function step()
 			quadsQT[n] = reportingQuadQ
 			quadsQT[reportingQuadQ.idS] = reportingQuadQ
 
-			joinRobots(hearingRobotsRT, receivedRobotsRT)
-			joinBoxes(hearingBoxesVT, receivedBoxesVT)
+			hearingRobotsRT = joinRobots(hearingRobotsRT, receivedRobotsRT)
+			hearingBoxesVT = joinBoxes(hearingBoxesVT, receivedBoxesVT)
 		end end
 	end
 -- get boxesVT, 
@@ -75,7 +77,69 @@ function step()
 --     hearingBoxesVT, 
 --     hearingRobotsRT
 
--- update vns, delete lost ones ---------------------
+local rallyPointV = {x = 0, y = 0}
+-- cmd from parent -------------------------------------
+	if vns.stateS == "wandering" then
+	-- fly randomly
+		local turn = (math.random() - 0.5) * 3
+		local speedLN = (math.random() - 0.5) * 0.50
+		local speedRN = (math.random() - 0.5) * 0.50
+		local speedN = math.sqrt(speedLN * speedLN + speedRN * speedRN)
+		speedLN = speedLN / speedN
+		speedRN = speedRN / speedN
+		setVelocity(speedLN, speedRN, turn)
+	elseif vns.stateS == "reporting" then
+		local cmdListCT = getCMDListCT(vns.parentS)  
+		print(#cmdListCT)
+		for i, cmdC in ipairs(cmdListCT) do
+			if cmdC.cmdS == "fly" then
+				print("i received fly")
+				print(cmdC.dataNST[1])
+				print(cmdC.dataNST[2])
+				print(cmdC.dataNST[3])
+				print(cmdC.dataNST[4])
+				rallyPointV = {
+					x = cmdC.dataNST[1],
+					y = cmdC.dataNST[2],
+				}
+				setVelocity(cmdC.dataNST[3], cmdC.dataNST[4], 0)
+			end
+		end
+
+		local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
+		sendCMD(vns.parentS, "VisionInfo", VisionDataNST)
+
+	elseif vns.stateS == "braining" then
+		setVelocity(0, 0, 0)
+	end
+
+	local cmdListCT = getCMDListCT()  
+	for i, cmdC in ipairs(cmdListCT) do
+		if cmdC.cmdS == "recruit" then
+			vns.stateS = "reporting"
+			vns.parentS = cmdC.fromIDS
+			print("i am recruited, parent:", vns.parentS)
+		end
+	end
+
+-- recruit new quads -----------------------------
+	for i, quadQ in ipairs(quadsQT) do
+		if vns.childrenVnsT[quadQ.idS] == nil then
+			sendCMD(quadQ.idS, "recruit", {math.random()})
+			local vVns = VNS:new{
+				idS = quadQ.idS, locV = quadQ.locV, 
+				dirN = quadQ.dirN, typeS = "quad", 
+			}
+			vns:add(vVns, "waitingAnswer")
+		end
+	end
+	if vns.stateS == "wandering" and #quadsQT ~= 0 then
+		vns.stateS = "braining"
+		print(getSelfIDS(), "i become a brain")
+	end
+
+-- update vns, remove lost ones, remove denied ones --------------
+	local denyParent = {}
 	for idS, childVns in pairs(vns.childrenVnsT) do
 		if robotsRT[idS] ~= nil then
 			childVns.locV = robotsRT[idS].locV
@@ -86,50 +150,63 @@ function step()
 			childVns.markidS = quadsQT[idS].markidS
 		else
 			-- can't see this child anymore
-																	print("lost", idS)
 			vns:remove(idS)
 		end
-	end
--- recruit new robots ------------------------------
-	for i, robotR in ipairs(robotsRT) do
-		if vns.childrenVnsT[robotR.idS] == nil then
-			-- a new robot
-																	print("recruiting", robotR.idS)
-			sendCMD(robotR.idS, "recruit", {math.random()})
-			local vVns = VNS:new{
-				idS = robotR.idS, locV = robotR.locV, 
-				dirN = robotR.dirN, typeS = "robot", 
-			}
-			vns:add(vVns)
-		end
-	end
--- recruit new quads -----------------------------
 
--- allocate answering robots ---------------------
-	for idS, robotR in pairs(vns.childrenRolesVnsTT.waitingAnswer) do
+		-- check deny
 		local cmdListCT = getCMDListCT(idS)  
 		local flag = 0
 		for i, cmdC in ipairs(cmdListCT) do
 			if cmdC.cmdS == "deny" then
-																	print("a deny", idS)
-				flag = 1 break end end
-		if flag == 0 then -- not deny, allocate
+				vns:changeRole(idS, "deny")
+				denyParent[idS] = cmdC.dataNST[1]
+				flag = 1 
+				break 
+			end 
+		end
+
+		-- reinforce marking from driving
+		if table.getSize(vns.childrenRolesVnsTT.marking) < 4 then
+			for idS, childRQ in pairs(vns.childrenRolesVnsTT.driving) do
+				vns:changeRole(idS, "marking")
+				break
+			end
+		end
+	end
+
+	-- denied
+	if vns.stateS == "wandering" then
+		for idS, robotR in pairs(vns.childrenRolesVnsTT.deny) do
+			local parentidS = denyParent[idS]
+			local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
+				-- NST means a table of number or string
+			sendCMD(parentidS, "VisionInfo", VisionDataNST)
+			break
+		end
+	end
+	for idS, robotR in pairs(vns.childrenRolesVnsTT.deny) do
+		vns:remove(idS)
+	end
+
+-- allocate answering robots ---------------------
+	for idS, childRQ in pairs(vns.childrenRolesVnsTT.waitingAnswer) do
+		if childRQ.typeS == "robot" then
 			if table.getSize(vns.childrenRolesVnsTT.marking) < 4 then
-																	print("allocating marking", idS)
 				vns:changeRole(idS, "marking")
 			else
-																	print("allocating driving", idS)
 				vns:changeRole(idS, "driving")
 			end
-		else
-			-- denied!
-			vns:remove(idS)
+		elseif childRQ.typeS == "quad" then
+			--if table.getSize(vns.childrenRolesVnsTT.quads) < 4 then
+				vns:changeRole(idS, "quads")
+			--end
 		end
 	end
 
 -- drive robots ----------------------------------
 	-- marking robots
 	for idS, robotR in pairs(vns.childrenRolesVnsTT.marking) do
+
 		local fluxVectorV = calcFlux(robotR.locV, vns.childrenRolesVnsTT.marking)
 		local disFluxN = math.sqrt(fluxVectorV.x * fluxVectorV.x + 
 		                           fluxVectorV.y * fluxVectorV.y)
@@ -141,7 +218,7 @@ function step()
 		while difN > 180 do difN = difN - 360 end
 		while difN < -180 do difN = difN + 360 end
 		local baseSpeedN = 10
-		if difN > 10 or difN < -10 then
+		if difN > 20 or difN < -20 then
 			if (difN > 0) then
 				setRobotVelocity(robotR.idS, -baseSpeedN/2, baseSpeedN)
 			else
@@ -152,15 +229,17 @@ function step()
 		end
 	end
 
+	-- driving robots
 	for idS, robotR in pairs(vns.childrenRolesVnsTT.driving) do
-		local vecRobotToCenterV = {x = -robotR.locV.x, y = -robotR.locV.y}
-		local dirRobottoTargetN = calcDir(robotR.locV, vecRobotToCenterV)
+		--local vecRobotToCenterV = {x = rallyPointV.x - robotR.locV.x, 
+		--                           y = rallyPointV.y - robotR.locV.y}
+		local dirRobottoTargetN = calcDir(robotR.locV, rallyPointV)
 
 		local difN = dirRobottoTargetN - robotR.dirN
 		while difN > 180 do difN = difN - 360 end
 		while difN < -180 do difN = difN + 360 end
-		local baseSpeedN = 15
-		if difN > 10 or difN < -10 then
+		local baseSpeedN = 10
+		if difN > 20 or difN < -20 then
 			if (difN > 0) then
 				setRobotVelocity(robotR.idS, -baseSpeedN/2, baseSpeedN)
 			else
@@ -172,16 +251,69 @@ function step()
 
 	end
 
+	-- quadcopters
+	for idS, quadQ in pairs(vns.childrenRolesVnsTT.quads) do
+		-- calc the rallypoint in his perspective
+		local thN = quadQ.dirN
+		local thRadN = thN * math.pi / 180
+		local newRallyV = {
+			x =  (0 - quadQ.locV.x) * math.cos(thRadN)
+			    +(0 - quadQ.locV.y) * math.sin(thRadN),
+			y = -(0 - quadQ.locV.x) * math.sin(thRadN) 
+			    +(0 - quadQ.locV.y) * math.cos(thRadN), 
+		}
+		-- calc fly dir in his perspective
+		local dis = math.sqrt(quadQ.locV.x * quadQ.locV.x + quadQ.locV.y * quadQ.locV.y)
+		local dirV = {}
+		if dis > 450 then
+			dirV.x =  (0 - quadQ.locV.x) * math.cos(thRadN)
+			         +(0 - quadQ.locV.y) * math.sin(thRadN)
+			dirV.y = -(0 - quadQ.locV.x) * math.sin(thRadN) 
+			         +(0 - quadQ.locV.y) * math.cos(thRadN)
+			dirV.x = dirV.x / dis * 10
+			dirV.y = dirV.y / dis * 10
+		else
+			dirV.x = 0
+			dirV.y = 0
+		end
+		print("i am", getSelfIDS(), "i send a fly cmd")
+		sendCMD(idS, "fly", {newRallyV.x, newRallyV.y, dirV.x, dirV.y})
+	end
+
+-- recruit new robots ------------------------------
+	for i, robotR in ipairs(robotsRT) do
+		if vns.childrenVnsT[robotR.idS] == nil then
+			-- a new robot
+			sendCMD(robotR.idS, "recruit", {math.random()})
+			local vVns = VNS:new{
+				idS = robotR.idS, locV = robotR.locV, 
+				dirN = robotR.dirN, typeS = "robot", 
+				stateS = "2",
+			}
+			vns:add(vVns, "waitingAnswer")
+		end
+	end
+
+print(getSelfIDS(), vns.stateS)
+print("childrenlist:")
+for i, vVns in pairs(vns.childrenVnsT) do
+	print("\t",vVns.idS, vVns.roleS, vVns.parentS)
+end
+
+print("grouplist:")
+for i, vVnsT in pairs(vns.childrenRolesVnsTT) do
+	print("\t", i)
+	for j, vVns in pairs(vVnsT) do
+		print("\t\t", vVns.idS)
+	end
+end
+
 -- buffer new robots ----------------------------------
+--[[
 	for idS, robotR in pairs(vns.childrenRolesVnsTT.new) do
 		vns:changeRole(idS, "waitingAnswer")
 	end
-
--- fly randomly --------------------------------------
-	local turn = (math.random() - 0.5) * 3
-	local speedLN = (math.random() - 0.5) * 0.50
-	local speedRN = (math.random() - 0.5) * 0.50
-	setVelocity(speedLN, speedRN, turn)
+--]]
 end
 
 -------------------------------------------------------------------
@@ -220,7 +352,7 @@ function calcFlux(focalPosV, robotsRT)
 	for idS, robotR in pairs(robotsRT) do
 		local otherRV3 = Vec3:create(robotR.locV.x, robotR.locV.y, 0)
 		local RV3 = focalPosV3 - otherRV3
-		flux = flux + 1.1 * RV3:nor() / (RV3:len() )
+		flux = flux + 1.3 * RV3:nor() / (RV3:len() )
 	end
 
 	return flux
@@ -280,7 +412,7 @@ function bindVisionInfoDataRT(dataNST)
 	return robotsRT, boxesVT
 end
 
-function calcQuadQ(fromidS, robotsRT, receivedRobotsRT)
+function calcQuadQ(fromIDS, robotsRT, receivedRobotsRT)
 	local paraT = {} -- rotation and translation parameters
 	local markidS
 	for i, vR in ipairs(receivedRobotsRT) do
@@ -308,7 +440,7 @@ function calcQuadQ(fromidS, robotsRT, receivedRobotsRT)
 		return {locV = {x = paraT.x,
 		                y = paraT.y,},
 				dirN = paraT.thN,
-				idS = fromidS,
+				idS = fromIDS,
 				markidS = markidS,
 		       }
 	end
@@ -341,20 +473,29 @@ function calcCoor(_receivedRobotsRT, _receivedBoxesVT, _QuadQ)
 end
 
 function joinRobots(_robotsRT, _receivedRobotsRT)
-	local n = #_robotsRT
-	for i, vR in ipairs(_receivedRobotsRT) do
-		if _robotsRT[vR.idS] == nil then
-			n = n + 1
-			_robotsRT[n] = vR
-			_robotsRT[vR.idS] = vR
+	local robotsRT = tableCopy(_robotsRT)
+	for idS, vR in pairs(_receivedRobotsRT) do
+		if robotsRT[idS] == nil then
+			robotsRT[idS] = vR
 		end
 	end
+	return robotsRT
 end
+
+function subtractRobots(_robotsRT, _subRobotsRT)
+	local robotsRT = tableCopy(_robotsRT)
+	for idS, vR in pairs(_subRobotsRT) do
+		robotsRT[idS] = nil
+	end
+	return robotsRT
+end
+
 function joinBoxes(_boxesVT, _receivedBoxesVT)
-	local n = #_boxesVT
+	local boxesVT = _boxesVT
+	local n = #boxesVT
 	for i, receivedBoxV in ipairs(_receivedBoxesVT) do
 		local flag = 0
-		for j, boxV in ipairs(_boxesVT) do
+		for j, boxV in ipairs(boxesVT) do
 			local x = boxV.x - receivedBoxV.x
 			local y = boxV.y - receivedBoxV.y
 			local disN = math.sqrt(x * x + y * y)
@@ -364,10 +505,11 @@ function joinBoxes(_boxesVT, _receivedBoxesVT)
 			end
 		end
 		if flag == 0 then
-			nBoxes = nBoxes + 1
-			_boxesVT[nBoxes] = receivedBoxV 
+			n = n + 1
+			boxesVT[nBoxes] = receivedBoxV 
 		end
 	end
+	return boxesVT
 end
 
 -- see boxes and robots ------------------
