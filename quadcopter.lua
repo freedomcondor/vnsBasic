@@ -98,11 +98,19 @@ local rallyPointV = {x = 0, y = 0}
 				print(cmdC.dataNST[2])
 				print(cmdC.dataNST[3])
 				print(cmdC.dataNST[4])
+				print(cmdC.dataNST[5])
 				rallyPointV = {
 					x = cmdC.dataNST[1],
 					y = cmdC.dataNST[2],
 				}
-				setVelocity(cmdC.dataNST[3], cmdC.dataNST[4], 0)
+				local rotateN = cmdC.dataNST[5]
+				if cmdC.dataNST[5] > 5 then
+					rotateN = 5
+				elseif cmdC.dataNST[5] < -5 then
+					rotateN = -5
+				end
+
+				setVelocity(cmdC.dataNST[3], cmdC.dataNST[4], rotateN)
 			end
 		end
 
@@ -113,26 +121,32 @@ local rallyPointV = {x = 0, y = 0}
 		setVelocity(0, 0, 0)
 	end
 
-	local cmdListCT = getCMDListCT()  
-	for i, cmdC in ipairs(cmdListCT) do
-		if cmdC.cmdS == "recruit" then
-			vns.stateS = "reporting"
-			vns.parentS = cmdC.fromIDS
-			print("i am recruited, parent:", vns.parentS)
+-- be recruited --------------------------------
+	if vns.stateS == "wandering" then
+		local cmdListCT = getCMDListCT()  
+		for i, cmdC in ipairs(cmdListCT) do
+			if cmdC.cmdS == "recruit" then
+				vns.stateS = "reporting"
+				vns.parentS = cmdC.fromIDS
+				print("i am recruited, parent:", vns.parentS)
+			end
 		end
 	end
 
 -- recruit new quads -----------------------------
-	for i, quadQ in ipairs(quadsQT) do
-		if vns.childrenVnsT[quadQ.idS] == nil then
-			sendCMD(quadQ.idS, "recruit", {math.random()})
-			local vVns = VNS:new{
-				idS = quadQ.idS, locV = quadQ.locV, 
-				dirN = quadQ.dirN, typeS = "quad", 
-			}
-			vns:add(vVns, "waitingAnswer")
+	if vns.stateS == "wandering" or vns.stateS == "braining" then
+		for i, quadQ in ipairs(quadsQT) do
+			if vns.childrenVnsT[quadQ.idS] == nil then
+				sendCMD(quadQ.idS, "recruit", {math.random()})
+				local vVns = VNS:new{
+					idS = quadQ.idS, locV = quadQ.locV, 
+					dirN = quadQ.dirN, typeS = "quad", 
+				}
+				vns:add(vVns, "waitingAnswer")
+			end
 		end
 	end
+	
 	if vns.stateS == "wandering" and #quadsQT ~= 0 then
 		vns.stateS = "braining"
 		print(getSelfIDS(), "i become a brain")
@@ -166,9 +180,17 @@ local rallyPointV = {x = 0, y = 0}
 		end
 
 		-- reinforce marking from driving
-		if table.getSize(vns.childrenRolesVnsTT.marking) < 4 then
+		local markingNumberN = 4
+		if vns.stateS == "reporting" then markingNumberN = 2 end
+		if table.getSize(vns.childrenRolesVnsTT.marking) < markingNumberN then
 			for idS, childRQ in pairs(vns.childrenRolesVnsTT.driving) do
 				vns:changeRole(idS, "marking")
+				break
+			end
+		end
+		if table.getSize(vns.childrenRolesVnsTT.marking) > markingNumberN then
+			for idS, childRQ in pairs(vns.childrenRolesVnsTT.marking) do
+				vns:changeRole(idS, "driving")
 				break
 			end
 		end
@@ -191,7 +213,9 @@ local rallyPointV = {x = 0, y = 0}
 -- allocate answering robots ---------------------
 	for idS, childRQ in pairs(vns.childrenRolesVnsTT.waitingAnswer) do
 		if childRQ.typeS == "robot" then
-			if table.getSize(vns.childrenRolesVnsTT.marking) < 4 then
+			local markingNumberN = 4
+			if vns.stateS == "reporting" then markingNumberN = 2 end
+			if table.getSize(vns.childrenRolesVnsTT.marking) < markingNumberN then
 				vns:changeRole(idS, "marking")
 			else
 				vns:changeRole(idS, "driving")
@@ -206,8 +230,7 @@ local rallyPointV = {x = 0, y = 0}
 -- drive robots ----------------------------------
 	-- marking robots
 	for idS, robotR in pairs(vns.childrenRolesVnsTT.marking) do
-
-		local fluxVectorV = calcFlux(robotR.locV, vns.childrenRolesVnsTT.marking)
+		local fluxVectorV = calcFlux(robotR.locV, vns.childrenRolesVnsTT.marking, vns.stateS)
 		local disFluxN = math.sqrt(fluxVectorV.x * fluxVectorV.x + 
 		                           fluxVectorV.y * fluxVectorV.y)
 		fluxVectorV.x = fluxVectorV.x + robotR.locV.x
@@ -276,8 +299,15 @@ local rallyPointV = {x = 0, y = 0}
 			dirV.x = 0
 			dirV.y = 0
 		end
+
+		-- calc rotate 
+		local dirQuadtoCenter = calcDir(quadQ.locV, {x=0, y=0})
+		local difN = dirQuadtoCenter - quadQ.dirN
+		while difN > 180 do difN = difN - 360 end
+		while difN < -180 do difN = difN + 360 end
+
 		print("i am", getSelfIDS(), "i send a fly cmd")
-		sendCMD(idS, "fly", {newRallyV.x, newRallyV.y, dirV.x, dirV.y})
+		sendCMD(idS, "fly", {newRallyV.x, newRallyV.y, dirV.x, dirV.y, difN})
 	end
 
 -- recruit new robots ------------------------------
@@ -327,21 +357,28 @@ end
 
 -- calc -----------------------------------------
 
-function calcFlux(focalPosV, robotsRT)
+function calcFlux(focalPosV, robotsRT, stateS)
 	local length = 100
 	local focalPosV3 = Vec3:create(focalPosV.x, focalPosV.y, 0)
 	local points = {
 		Vec3:create(-length, -length, 0),
+		Vec3:create(-length,  length, 0),
+
 		--Vec3:create( 0,      -length, 0),
-		Vec3:create( length, -length, 0),
 
 		--Vec3:create(-length,  0,      0),
 		--Vec3:create( length,  0,      0),
 
-		Vec3:create(-length,  length, 0),
 		--Vec3:create( 0,       length, 0),
+
+		Vec3:create( length, -length, 0),
 		Vec3:create( length,  length, 0),
 	}
+
+	if stateS == "reporting" then
+		points[3] = nil
+		points[4] = nil
+	end
 
 	local flux = Vec3:create(0, 0, 0)
 	for i, pointV3 in ipairs(points) do
