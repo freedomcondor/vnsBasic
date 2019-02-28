@@ -233,45 +233,22 @@ local rallyPointV = {x = 0, y = 0}
 		local fluxVectorV = calcFlux(robotR.locV, vns.childrenRolesVnsTT.marking, vns.stateS)
 		local disFluxN = math.sqrt(fluxVectorV.x * fluxVectorV.x + 
 		                           fluxVectorV.y * fluxVectorV.y)
-		fluxVectorV.x = fluxVectorV.x + robotR.locV.x
-		fluxVectorV.y = fluxVectorV.y + robotR.locV.y
-		local dirRobottoTargetN = calcDir(robotR.locV, fluxVectorV)
-
-		local difN = dirRobottoTargetN - robotR.dirN
-		while difN > 180 do difN = difN - 360 end
-		while difN < -180 do difN = difN + 360 end
-		local baseSpeedN = 10
-		if difN > 20 or difN < -20 then
-			if (difN > 0) then
-				setRobotVelocity(robotR.idS, -baseSpeedN/2, baseSpeedN)
-			else
-				setRobotVelocity(robotR.idS, baseSpeedN, -baseSpeedN/2)
-			end
-		else
-			setRobotVelocity(robotR.idS, baseSpeedN * 4, baseSpeedN * 4)
-		end
+		fluxVectorV.x = fluxVectorV.x / disFluxN * 30
+		fluxVectorV.y = fluxVectorV.y / disFluxN * 30
+		local leftSpeed, rightSpeed = calcRobotBiSpeed(fluxVectorV, robotR.dirN, 1)
+		setRobotVelocity(robotR.idS, leftSpeed, rightSpeed)
 	end
 
 	-- driving robots
 	for idS, robotR in pairs(vns.childrenRolesVnsTT.driving) do
-		--local vecRobotToCenterV = {x = rallyPointV.x - robotR.locV.x, 
-		--                           y = rallyPointV.y - robotR.locV.y}
-		local dirRobottoTargetN = calcDir(robotR.locV, rallyPointV)
-
-		local difN = dirRobottoTargetN - robotR.dirN
-		while difN > 180 do difN = difN - 360 end
-		while difN < -180 do difN = difN + 360 end
-		local baseSpeedN = 10
-		if difN > 20 or difN < -20 then
-			if (difN > 0) then
-				setRobotVelocity(robotR.idS, -baseSpeedN/2, baseSpeedN)
-			else
-				setRobotVelocity(robotR.idS, baseSpeedN, -baseSpeedN/2)
-			end
-		else
-			setRobotVelocity(robotR.idS, baseSpeedN * 4, baseSpeedN * 4)
-		end
-
+		local fluxVectorV = {x = rallyPointV.x - robotR.locV.x, 
+		                     y = rallyPointV.y - robotR.locV.y }
+		local disFluxN = math.sqrt(fluxVectorV.x * fluxVectorV.x + 
+		                           fluxVectorV.y * fluxVectorV.y)
+		fluxVectorV.x = fluxVectorV.x / disFluxN * 30
+		fluxVectorV.y = fluxVectorV.y / disFluxN * 30
+		local leftSpeed, rightSpeed = calcRobotBiSpeed(fluxVectorV, robotR.dirN, 1)
+		setRobotVelocity(robotR.idS, leftSpeed, rightSpeed)
 	end
 
 	-- quadcopters
@@ -393,6 +370,20 @@ function calcFlux(focalPosV, robotsRT, stateS)
 	end
 
 	return flux
+end
+
+function calcRobotBiSpeed(_targetVectorV, _dirN, turnRate)
+	--TODO: check direction, when reversing, something wrong
+	local dirRobottoTargetN = calcDir({x=0, y=0}, _targetVectorV)
+	local dirRadN = (dirRobottoTargetN - _dirN) * math.pi / 180
+		-- left+  right-
+	local p = math.sqrt(_targetVectorV.x * _targetVectorV.x +
+	                    _targetVectorV.y * _targetVectorV.y )
+	local left  = p * math.cos(dirRadN)
+	local right = p * math.cos(dirRadN)
+	left  = left  - p * math.sin(dirRadN) * turnRate
+	right = right + p * math.sin(dirRadN) * turnRate
+	return left, right
 end
 
 ---------- shared vision ----------------------
