@@ -373,7 +373,6 @@ function calcFlux(focalPosV, robotsRT, stateS)
 end
 
 function calcRobotBiSpeed(_targetVectorV, _dirN, turnRate)
-	--TODO: check direction, when reversing, something wrong
 	local dirRobottoTargetN = calcDir({x=0, y=0}, _targetVectorV)
 	local dirRadN = (dirRobottoTargetN - _dirN) * math.pi / 180
 		-- left+  right-
@@ -381,8 +380,13 @@ function calcRobotBiSpeed(_targetVectorV, _dirN, turnRate)
 	                    _targetVectorV.y * _targetVectorV.y )
 	local left  = p * math.cos(dirRadN)
 	local right = p * math.cos(dirRadN)
-	left  = left  - p * math.sin(dirRadN) * turnRate
-	right = right + p * math.sin(dirRadN) * turnRate
+	if left > 0 then
+		left  = left  - p * math.sin(dirRadN) * turnRate
+		right = right + p * math.sin(dirRadN) * turnRate
+	else
+		left  = left  + p * math.sin(dirRadN) * turnRate
+		right = right - p * math.sin(dirRadN) * turnRate
+	end
 	return left, right
 end
 
