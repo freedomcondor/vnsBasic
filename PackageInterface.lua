@@ -60,7 +60,7 @@ function getCMD()
 	end
 end
 
--- get a cmd list
+-- get a cmd list from x (if x == nil, get every thing)
 function getCMDListCT(x)		--CT:  cmd table(array)
 	local i = 0
 	local listCT = {}
