@@ -36,8 +36,8 @@
       <actuators>
         <radios implementation="default"/>
         <joints implementation="default">
-          <joint id="axis0_axis1" mode="velocity" max_impulse="0.011"/>
-          <joint id="axis1_axis2" mode="velocity" max_impulse="0.011"/>
+          <joint id="axis0_axis1" mode="velocity" max_impulse="0.001"/>
+          <joint id="axis1_axis2" mode="velocity" max_impulse="0.001"/>
           <joint id="axis2_body" mode="velocity" max_impulse="0.011"/>
         </joints>
       </actuators>

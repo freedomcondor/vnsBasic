@@ -1,9 +1,4 @@
 ------------------------------------------------------------------------
--- Version 3.0
---     quadcopters recruit each other with better control method
-------------------------------------------------------------------------
-
-------------------------------------------------------------------------
 --   Global Variables
 ------------------------------------------------------------------------
 
@@ -16,25 +11,6 @@ local VNS = require("VNS")
 --require("debugger")
 
 local vns
-
-local baseDis = 200
-local structure = {
-	head = {
-		children = {
-			{
-				role = "arm1",
-				position = {y = 1 * baseDis, x = 0, dir = 90},
-			},
-			{
-				role = "arm2",
-				position = {y = -1 * baseDis, x = 0, dir = 90},
-			},
-		},
-	},
-	arm1 = {},
-	arm2 = {},
-}
-local myRole
 
 ------------------------------------------------------------------------
 --   ARGoS Functions
@@ -55,12 +31,6 @@ function reset()
 	vns.childrenRolesVnsTT.quads = {}
 	vns.childrenRolesVnsTT.waitingAnswer= {}
 	vns.childrenRolesVnsTT.deny = {}
-
-	----- assign a brain ---------
-	if getSelfIDS() == "quadcopter0" then
-		myRole = "head"
-		vns.stateS = "braining"
-	end
 end
 
 -------------------------------------------------------------------
@@ -128,21 +98,11 @@ local rallyPointV = {x = 0, y = 0}
 				print(cmdC.dataNST[2])
 				print(cmdC.dataNST[3])
 				print(cmdC.dataNST[4])
-				print(cmdC.dataNST[5])
 				rallyPointV = {
 					x = cmdC.dataNST[1],
 					y = cmdC.dataNST[2],
 				}
-				local rotateN = cmdC.dataNST[5]
-				if cmdC.dataNST[5] > 5 then
-					rotateN = 5
-				elseif cmdC.dataNST[5] < -5 then
-					rotateN = -5
-				end
-
-				setVelocity(cmdC.dataNST[3], cmdC.dataNST[4], rotateN)
-			elseif cmdC.cmdS == "shiftingTo" then
-				vns.shiftingTo= cmdC.dataNST[1]
+				setVelocity(cmdC.dataNST[3], cmdC.dataNST[4], 0)
 			end
 		end
 
@@ -153,60 +113,32 @@ local rallyPointV = {x = 0, y = 0}
 		setVelocity(0, 0, 0)
 	end
 
--- be recruited --------------------------------
-	if vns.stateS == "wandering" then
-		local cmdListCT = getCMDListCT()  
-		for i, cmdC in ipairs(cmdListCT) do
-			if cmdC.cmdS == "recruit" then
-				vns.stateS = "reporting"
-				vns.parentS = cmdC.fromIDS
-
-				myRole = cmdC.dataNST[1]
-
-				print("i am recruited, parent:", vns.parentS)
-			end
-		end
-	end
-	if vns.shiftingTo ~= nil then
-		local cmdListCT = getCMDListCT(vns.shiftingTo)  
-		for i, cmdC in ipairs(cmdListCT) do
-			if cmdC.cmdS == "recruit" then
-				vns.stateS = "reporting"
-				vns.parentS = cmdC.fromIDS
-				print("i am recruited, parent:", vns.parentS)
-			end
+	-- TODO: check condition? only be recruited if wandering
+	local cmdListCT = getCMDListCT()  
+	for i, cmdC in ipairs(cmdListCT) do
+		if cmdC.cmdS == "recruit" then
+			vns.stateS = "reporting"
+			vns.parentS = cmdC.fromIDS
+			print("i am recruited, parent:", vns.parentS)
 		end
 	end
 
 -- recruit new quads -----------------------------
-	--if vns.stateS == "wandering" or vns.stateS == "braining" then
-	if vns.stateS == "reporting" or vns.stateS == "braining" then
-		for i, quadQ in ipairs(quadsQT) do
-			if vns.childrenVnsT[quadQ.idS] == nil then
-				local assignedRole = "shifting"
-				if myRole ~= nil then
-					if structure[myRole].children ~= nil then
-						for i, v in pairs(structure[myRole].children) do
-							if v.fulfill == nil then
-								assignedRole = v.role
-								v.fulfill = quadQ.idS
-								break
-							end
-						end
-					end
-				end
-					
-				sendCMD(quadQ.idS, "recruit", {assignedRole})
-				local vVns = VNS:new{
-					idS = quadQ.idS, locV = quadQ.locV, 
-					dirN = quadQ.dirN, typeS = "quad",
-				}
-				vVns.structureRole = assignedRole
-				vns:add(vVns, "waitingAnswer")
-			end
+	for i, quadQ in ipairs(quadsQT) do
+		if vns.childrenVnsT[quadQ.idS] == nil then
+			sendCMD(quadQ.idS, "recruit", {math.random()})
+			local vVns = VNS:new{
+				idS = quadQ.idS, locV = quadQ.locV, 
+				dirN = quadQ.dirN, typeS = "quad", 
+			}
+			vns:add(vVns, "waitingAnswer")
 		end
 	end
-	
+	if vns.stateS == "wandering" and #quadsQT ~= 0 then
+		vns.stateS = "braining"
+		print(getSelfIDS(), "i become a brain")
+	end
+
 -- update vns, remove lost ones, remove denied ones --------------
 	local denyParent = {}
 	for idS, childVns in pairs(vns.childrenVnsT) do
@@ -218,13 +150,6 @@ local rallyPointV = {x = 0, y = 0}
 			childVns.dirN = quadsQT[idS].dirN
 			childVns.markidS = quadsQT[idS].markidS
 		else
-			--[[
-			if childVns.structureRole ~= nil then
-				structure[childVns.structureRole].fulfill = nil
-				--structure[myRole].children[]childVns.structureRole].fulfill = nil
-				--TODO: delete it properly
-			end
-			--]]
 			-- can't see this child anymore
 			vns:remove(idS)
 		end
@@ -242,26 +167,15 @@ local rallyPointV = {x = 0, y = 0}
 		end
 
 		-- reinforce marking from driving
-		local markingNumberN = 4
-		if vns.stateS == "reporting" then markingNumberN = 2 end
-		if table.getSize(vns.childrenRolesVnsTT.marking) < markingNumberN then
+		if table.getSize(vns.childrenRolesVnsTT.marking) < 4 then
 			for idS, childRQ in pairs(vns.childrenRolesVnsTT.driving) do
 				vns:changeRole(idS, "marking")
-				break
-			end
-		end
-		if table.getSize(vns.childrenRolesVnsTT.marking) > markingNumberN then
-			for idS, childRQ in pairs(vns.childrenRolesVnsTT.marking) do
-				vns:changeRole(idS, "driving")
 				break
 			end
 		end
 	end
 
 	-- denied
-	-- TODO: selectivly report
-	--	 if i am shifting and denied parent is my target, or wandering, report
-	--	 report to parent elsewhere
 	if vns.stateS == "wandering" then
 		for idS, robotR in pairs(vns.childrenRolesVnsTT.deny) do
 			local parentidS = denyParent[idS]
@@ -278,17 +192,13 @@ local rallyPointV = {x = 0, y = 0}
 -- allocate answering robots ---------------------
 	for idS, childRQ in pairs(vns.childrenRolesVnsTT.waitingAnswer) do
 		if childRQ.typeS == "robot" then
-			local markingNumberN = 4
-			if vns.stateS == "reporting" then markingNumberN = 2 end
-			if table.getSize(vns.childrenRolesVnsTT.marking) < markingNumberN then
+			if table.getSize(vns.childrenRolesVnsTT.marking) < 4 then
 				vns:changeRole(idS, "marking")
 			else
 				vns:changeRole(idS, "driving")
 			end
 		elseif childRQ.typeS == "quad" then
 			--if table.getSize(vns.childrenRolesVnsTT.quads) < 4 then
-				--TODO: check children status, add children or make it shifting
-				-- don't need this
 				vns:changeRole(idS, "quads")
 			--end
 		end
@@ -297,25 +207,49 @@ local rallyPointV = {x = 0, y = 0}
 -- drive robots ----------------------------------
 	-- marking robots
 	for idS, robotR in pairs(vns.childrenRolesVnsTT.marking) do
-		local fluxVectorV = calcFlux(robotR.locV, vns.childrenRolesVnsTT.marking, vns.stateS)
+
+		local fluxVectorV = calcFlux(robotR.locV, vns.childrenRolesVnsTT.marking)
 		local disFluxN = math.sqrt(fluxVectorV.x * fluxVectorV.x + 
 		                           fluxVectorV.y * fluxVectorV.y)
-		fluxVectorV.x = fluxVectorV.x / disFluxN * 30
-		fluxVectorV.y = fluxVectorV.y / disFluxN * 30
-		local leftSpeed, rightSpeed = calcRobotBiSpeed(fluxVectorV, robotR.dirN, 1)
-		setRobotVelocity(robotR.idS, leftSpeed, rightSpeed)
+		fluxVectorV.x = fluxVectorV.x + robotR.locV.x
+		fluxVectorV.y = fluxVectorV.y + robotR.locV.y
+		local dirRobottoTargetN = calcDir(robotR.locV, fluxVectorV)
+
+		local difN = dirRobottoTargetN - robotR.dirN
+		while difN > 180 do difN = difN - 360 end
+		while difN < -180 do difN = difN + 360 end
+		local baseSpeedN = 10
+		if difN > 20 or difN < -20 then
+			if (difN > 0) then
+				setRobotVelocity(robotR.idS, -baseSpeedN/2, baseSpeedN)
+			else
+				setRobotVelocity(robotR.idS, baseSpeedN, -baseSpeedN/2)
+			end
+		else
+			setRobotVelocity(robotR.idS, baseSpeedN * 4, baseSpeedN * 4)
+		end
 	end
 
 	-- driving robots
 	for idS, robotR in pairs(vns.childrenRolesVnsTT.driving) do
-		local fluxVectorV = {x = rallyPointV.x - robotR.locV.x, 
-		                     y = rallyPointV.y - robotR.locV.y }
-		local disFluxN = math.sqrt(fluxVectorV.x * fluxVectorV.x + 
-		                           fluxVectorV.y * fluxVectorV.y)
-		fluxVectorV.x = fluxVectorV.x / disFluxN * 30
-		fluxVectorV.y = fluxVectorV.y / disFluxN * 30
-		local leftSpeed, rightSpeed = calcRobotBiSpeed(fluxVectorV, robotR.dirN, 1)
-		setRobotVelocity(robotR.idS, leftSpeed, rightSpeed)
+		--local vecRobotToCenterV = {x = rallyPointV.x - robotR.locV.x, 
+		--                           y = rallyPointV.y - robotR.locV.y}
+		local dirRobottoTargetN = calcDir(robotR.locV, rallyPointV)
+
+		local difN = dirRobottoTargetN - robotR.dirN
+		while difN > 180 do difN = difN - 360 end
+		while difN < -180 do difN = difN + 360 end
+		local baseSpeedN = 10
+		if difN > 20 or difN < -20 then
+			if (difN > 0) then
+				setRobotVelocity(robotR.idS, -baseSpeedN/2, baseSpeedN)
+			else
+				setRobotVelocity(robotR.idS, baseSpeedN, -baseSpeedN/2)
+			end
+		else
+			setRobotVelocity(robotR.idS, baseSpeedN * 4, baseSpeedN * 4)
+		end
+
 	end
 
 	-- quadcopters
@@ -330,52 +264,21 @@ local rallyPointV = {x = 0, y = 0}
 			    +(0 - quadQ.locV.y) * math.cos(thRadN), 
 		}
 		-- calc fly dir in his perspective
-		--TODO: fly towards point
-		local targetPointV = {}
-		if quadQ.structureRole == "shifting" then
-			targetPointV.x = rallyPointV.x
-			targetPointV.y = rallyPointV.y
-		elseif quadQ.structureRole ~= nil and quadQ.structureRole ~= "shifting" then
-			if structure[myRole].children ~= nil then
-				for i, v in pairs(structure[myRole].children) do
-					if v.fulfill ~= nil then
-						targetPointV.x = v.position.x
-						targetPointV.y = v.position.y
-						targetPointV.dir = v.position.dir
-						break
-					end
-				end
-			end
-		end
-		local newTargetPointV = {
-			x =  (targetPointV.x - quadQ.locV.x) * math.cos(thRadN)
-			    +(targetPointV.y - quadQ.locV.y) * math.sin(thRadN),
-			y = -(targetPointV.x - quadQ.locV.x) * math.sin(thRadN) 
-			    +(targetPointV.y - quadQ.locV.y) * math.cos(thRadN), 
-		}
-
-		local dis = math.sqrt(newTargetPointV.x * newTargetPointV.x +
-		                      newTargetPointV.y * newTargetPointV.y )
-		local dirV = {
-			--x = newTargetPointV.x / dis * 5,
-			--y = newTargetPointV.y / dis * 5,
-			x = newTargetPointV.x * dis * 0.001,
-			y = newTargetPointV.y * dis * 0.001,
-		}
-
-		-- calc rotate 
-		--local dirQuadtoCenter = calcDir(quadQ.locV, {x=0, y=0})
-		local difN
-		if targetPointV.dir ~= nil then
-			difN = targetPointV.dir - quadQ.dirN
+		local dis = math.sqrt(quadQ.locV.x * quadQ.locV.x + quadQ.locV.y * quadQ.locV.y)
+		local dirV = {}
+		if dis > 360 then
+			dirV.x =  (0 - quadQ.locV.x) * math.cos(thRadN)
+			         +(0 - quadQ.locV.y) * math.sin(thRadN)
+			dirV.y = -(0 - quadQ.locV.x) * math.sin(thRadN) 
+			         +(0 - quadQ.locV.y) * math.cos(thRadN)
+			dirV.x = dirV.x / dis * 10
+			dirV.y = dirV.y / dis * 10
 		else
-			difN = 0
+			dirV.x = 0
+			dirV.y = 0
 		end
-		while difN > 180 do difN = difN - 360 end
-		while difN < -180 do difN = difN + 360 end
-
 		print("i am", getSelfIDS(), "i send a fly cmd")
-		sendCMD(idS, "fly", {newRallyV.x, newRallyV.y, dirV.x, dirV.y, difN})
+		sendCMD(idS, "fly", {newRallyV.x, newRallyV.y, dirV.x, dirV.y})
 	end
 
 -- recruit new robots ------------------------------
@@ -425,28 +328,21 @@ end
 
 -- calc -----------------------------------------
 
-function calcFlux(focalPosV, robotsRT, stateS)
+function calcFlux(focalPosV, robotsRT)
 	local length = 100
 	local focalPosV3 = Vec3:create(focalPosV.x, focalPosV.y, 0)
 	local points = {
 		Vec3:create(-length, -length, 0),
-		Vec3:create(-length,  length, 0),
-
 		--Vec3:create( 0,      -length, 0),
+		Vec3:create( length, -length, 0),
 
 		--Vec3:create(-length,  0,      0),
 		--Vec3:create( length,  0,      0),
 
+		Vec3:create(-length,  length, 0),
 		--Vec3:create( 0,       length, 0),
-
-		Vec3:create( length, -length, 0),
 		Vec3:create( length,  length, 0),
 	}
-
-	if stateS == "reporting" then
-		points[3] = nil
-		points[4] = nil
-	end
 
 	local flux = Vec3:create(0, 0, 0)
 	for i, pointV3 in ipairs(points) do
@@ -461,24 +357,6 @@ function calcFlux(focalPosV, robotsRT, stateS)
 	end
 
 	return flux
-end
-
-function calcRobotBiSpeed(_targetVectorV, _dirN, turnRate)
-	local dirRobottoTargetN = calcDir({x=0, y=0}, _targetVectorV)
-	local dirRadN = (dirRobottoTargetN - _dirN) * math.pi / 180
-		-- left+  right-
-	local p = math.sqrt(_targetVectorV.x * _targetVectorV.x +
-	                    _targetVectorV.y * _targetVectorV.y )
-	local left  = p * math.cos(dirRadN)
-	local right = p * math.cos(dirRadN)
-	if left > 0 then
-		left  = left  - p * math.sin(dirRadN) * turnRate
-		right = right + p * math.sin(dirRadN) * turnRate
-	else
-		left  = left  + p * math.sin(dirRadN) * turnRate
-		right = right - p * math.sin(dirRadN) * turnRate
-	end
-	return left, right
 end
 
 ---------- shared vision ----------------------
