@@ -1,9 +1,4 @@
 ------------------------------------------------------------------------
--- Version 3.0
---     quadcopters recruit each other with better control method
-------------------------------------------------------------------------
-
-------------------------------------------------------------------------
 --   Global Variables
 ------------------------------------------------------------------------
 
@@ -16,25 +11,6 @@ local VNS = require("VNS")
 --require("debugger")
 
 local vns
-
-local baseDis = 200
-local structure = {
-	head = {
-		children = {
-			{
-				role = "arm1",
-				position = {y = 1 * baseDis, x = 0, dir = 90},
-			},
-			{
-				role = "arm2",
-				position = {y = -1 * baseDis, x = 0, dir = 90},
-			},
-		},
-	},
-	arm1 = {},
-	arm2 = {},
-}
-local myRole
 
 ------------------------------------------------------------------------
 --   ARGoS Functions
@@ -55,12 +31,6 @@ function reset()
 	vns.childrenRolesVnsTT.quads = {}
 	vns.childrenRolesVnsTT.waitingAnswer= {}
 	vns.childrenRolesVnsTT.deny = {}
-
-	----- assign a brain ---------
-	if getSelfIDS() == "quadcopter0" then
-		myRole = "head"
-		vns.stateS = "braining"
-	end
 end
 
 -------------------------------------------------------------------
@@ -141,8 +111,6 @@ local rallyPointV = {x = 0, y = 0}
 				end
 
 				setVelocity(cmdC.dataNST[3], cmdC.dataNST[4], rotateN)
-			elseif cmdC.cmdS == "shiftingTo" then
-				vns.shiftingTo= cmdC.dataNST[1]
 			end
 		end
 
@@ -160,55 +128,30 @@ local rallyPointV = {x = 0, y = 0}
 			if cmdC.cmdS == "recruit" then
 				vns.stateS = "reporting"
 				vns.parentS = cmdC.fromIDS
-
-				myRole = cmdC.dataNST[1]
-
-				print("i am recruited, parent:", vns.parentS)
-			end
-		end
-	end
-	if vns.shiftingTo ~= nil then
-		local cmdListCT = getCMDListCT(vns.shiftingTo)  
-		for i, cmdC in ipairs(cmdListCT) do
-			if cmdC.cmdS == "recruit" then
-				vns.stateS = "reporting"
-				vns.parentS = cmdC.fromIDS
 				print("i am recruited, parent:", vns.parentS)
 			end
 		end
 	end
 
 -- recruit new quads -----------------------------
-	--if vns.stateS == "wandering" or vns.stateS == "braining" then
-	if vns.stateS == "reporting" or vns.stateS == "braining" then
+	if vns.stateS == "wandering" or vns.stateS == "braining" then
 		for i, quadQ in ipairs(quadsQT) do
 			if vns.childrenVnsT[quadQ.idS] == nil then
-				local assignedRole = "shifting"
-				if myRole ~= nil then
-					if structure[myRole].children ~= nil then
-						print("recruting quads, for structure.children")
-						for i, v in pairs(structure[myRole].children) do
-							print(v.role)
-							if v.fulfill == nil then
-								assignedRole = v.role
-								v.fulfill = quadQ.idS
-								break
-							end
-						end
-					end
-				end
-					
-				sendCMD(quadQ.idS, "recruit", {assignedRole})
+				sendCMD(quadQ.idS, "recruit", {math.random()})
 				local vVns = VNS:new{
 					idS = quadQ.idS, locV = quadQ.locV, 
-					dirN = quadQ.dirN, typeS = "quad",
+					dirN = quadQ.dirN, typeS = "quad", 
 				}
-				vVns.structureRole = assignedRole
 				vns:add(vVns, "waitingAnswer")
 			end
 		end
 	end
 	
+	if vns.stateS == "wandering" and #quadsQT ~= 0 then
+		vns.stateS = "braining"
+		print(getSelfIDS(), "i become a brain")
+	end
+
 -- update vns, remove lost ones, remove denied ones --------------
 	local denyParent = {}
 	for idS, childVns in pairs(vns.childrenVnsT) do
@@ -221,13 +164,6 @@ local rallyPointV = {x = 0, y = 0}
 			childVns.markidS = quadsQT[idS].markidS
 		else
 			-- can't see this child anymore
-			--[[
-			if childVns.structureRole ~= nil then
-				structure[childVns.structureRole].fulfill = nil
-				--structure[myRole].children[]childVns.structureRole].fulfill = nil
-				--TODO: delete it properly
-			end
-			--]]
 			vns:remove(idS)
 		end
 
@@ -261,9 +197,6 @@ local rallyPointV = {x = 0, y = 0}
 	end
 
 	-- denied
-	-- TODO: selectivly report
-	--	 if i am shifting and denied parent is my target, or wandering, report
-	--	 report to parent elsewhere
 	if vns.stateS == "wandering" then
 		for idS, robotR in pairs(vns.childrenRolesVnsTT.deny) do
 			local parentidS = denyParent[idS]
@@ -289,8 +222,6 @@ local rallyPointV = {x = 0, y = 0}
 			end
 		elseif childRQ.typeS == "quad" then
 			--if table.getSize(vns.childrenRolesVnsTT.quads) < 4 then
-				--TODO: check children status, add children or make it shifting
-				-- don't need this
 				vns:changeRole(idS, "quads")
 			--end
 		end
@@ -332,47 +263,23 @@ local rallyPointV = {x = 0, y = 0}
 			    +(0 - quadQ.locV.y) * math.cos(thRadN), 
 		}
 		-- calc fly dir in his perspective
-		--TODO: fly towards point
-		local targetPointV = {}
-		if quadQ.structureRole == "shifting" then
-			targetPointV.x = rallyPointV.x
-			targetPointV.y = rallyPointV.y
-		elseif quadQ.structureRole ~= nil and quadQ.structureRole ~= "shifting" then
-			if structure[myRole].children ~= nil then
-				for i, v in pairs(structure[myRole].children) do
-					if v.fulfill ~= nil then
-						targetPointV.x = v.position.x
-						targetPointV.y = v.position.y
-						targetPointV.dir = v.position.dir
-						break
-					end
-				end
-			end
+		local dis = math.sqrt(quadQ.locV.x * quadQ.locV.x + quadQ.locV.y * quadQ.locV.y)
+		local dirV = {}
+		if dis > 360 then
+			dirV.x =  (0 - quadQ.locV.x) * math.cos(thRadN)
+			         +(0 - quadQ.locV.y) * math.sin(thRadN)
+			dirV.y = -(0 - quadQ.locV.x) * math.sin(thRadN) 
+			         +(0 - quadQ.locV.y) * math.cos(thRadN)
+			dirV.x = dirV.x / dis * 10
+			dirV.y = dirV.y / dis * 10
+		else
+			dirV.x = 0
+			dirV.y = 0
 		end
-		local newTargetPointV = {
-			x =  (targetPointV.x - quadQ.locV.x) * math.cos(thRadN)
-			    +(targetPointV.y - quadQ.locV.y) * math.sin(thRadN),
-			y = -(targetPointV.x - quadQ.locV.x) * math.sin(thRadN) 
-			    +(targetPointV.y - quadQ.locV.y) * math.cos(thRadN), 
-		}
-
-		local dis = math.sqrt(newTargetPointV.x * newTargetPointV.x +
-		                      newTargetPointV.y * newTargetPointV.y )
-		local dirV = {
-			--x = newTargetPointV.x / dis * 5,
-			--y = newTargetPointV.y / dis * 5,
-			x = newTargetPointV.x * dis * 0.011,
-			y = newTargetPointV.y * dis * 0.011,
-		}
 
 		-- calc rotate 
-		--local dirQuadtoCenter = calcDir(quadQ.locV, {x=0, y=0})
-		local difN
-		if targetPointV.dir ~= nil then
-			difN = targetPointV.dir - quadQ.dirN
-		else
-			difN = 0
-		end
+		local dirQuadtoCenter = calcDir(quadQ.locV, {x=0, y=0})
+		local difN = dirQuadtoCenter - quadQ.dirN
 		while difN > 180 do difN = difN - 360 end
 		while difN < -180 do difN = difN + 360 end
 
@@ -397,7 +304,7 @@ local rallyPointV = {x = 0, y = 0}
 print(getSelfIDS(), vns.stateS)
 print("childrenlist:")
 for i, vVns in pairs(vns.childrenVnsT) do
-	print("\t",vVns.idS, vVns.roleS, vVns.parentS, vVns.structureRole)
+	print("\t",vVns.idS, vVns.roleS, vVns.parentS)
 end
 
 print("grouplist:")
