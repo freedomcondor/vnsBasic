@@ -186,7 +186,9 @@ local rallyPointV = {x = 0, y = 0}
 				local assignedRole = "shifting"
 				if myRole ~= nil then
 					if structure[myRole].children ~= nil then
+						print("recruting quads, for structure.children")
 						for i, v in pairs(structure[myRole].children) do
+							print(v.role)
 							if v.fulfill == nil then
 								assignedRole = v.role
 								v.fulfill = quadQ.idS
@@ -395,7 +397,7 @@ local rallyPointV = {x = 0, y = 0}
 print(getSelfIDS(), vns.stateS)
 print("childrenlist:")
 for i, vVns in pairs(vns.childrenVnsT) do
-	print("\t",vVns.idS, vVns.roleS, vVns.parentS)
+	print("\t",vVns.idS, vVns.roleS, vVns.parentS, vVns.structureRole)
 end
 
 print("grouplist:")
