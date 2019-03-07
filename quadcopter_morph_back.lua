@@ -15,29 +15,19 @@ local Quaternion = require("math/Quaternion")
 local VNS = require("VNS")
 --require("debugger")
 
--- vns and connection
 local vns
-local rallyPointV = {x = 0, y = 0}
-local myTakeoverAssign = nil
 
-local deniedReport = nil
-local deniedReportCount = 0
-local lostCountN = 0
-
------ structure -----
 local baseDis = 200
 local structure = {
 	head = {
 		children = {
 			{
 				role = "arm1",
-				position = {y = 1 * baseDis, x = 0, dir = -90},
-				fulfill = nil,
+				position = {y = 1 * baseDis, x = 0, dir = 90},
 			},
 			{
 				role = "arm2",
 				position = {y = -1 * baseDis, x = 0, dir = 90},
-				fulfill = nil,
 			},
 		},
 	},
@@ -66,27 +56,15 @@ function reset()
 	vns.childrenRolesVnsTT.waitingAnswer= {}
 	vns.childrenRolesVnsTT.deny = {}
 
-	myTakeoverAssign = "everyone"
-
 	----- assign a brain ---------
-	-- for debug
 	if getSelfIDS() == "quadcopter0" then
 		myRole = "head"
 		vns.stateS = "braining"
-		myTakeoverAssign = nil
 	end
 end
 
 -------------------------------------------------------------------
 function step()
-	-- for debug, print lines
-	if getSelfIDS() == "quadcopter0" then
-		print()
-		print()
-	end
-	print("---------------------")
-
-
 -- see the world -------------------------------------
 
 	local robotsRT = getRobotsRT()
@@ -129,297 +107,192 @@ function step()
 --     hearingBoxesVT, 
 --     hearingRobotsRT
 
--- update vns, remove lost ones, remove bye ones --------------
-	local denyParent = {}
-	for idS, childVns in pairs(vns.childrenVnsT) do
-		if robotsRT[idS] ~= nil then
-			childVns.locV = robotsRT[idS].locV
-			childVns.dirN = robotsRT[idS].dirN
-			childVns.lost = 0
-		elseif quadsQT[idS] ~= nil then
-			childVns.locV = quadsQT[idS].locV
-			childVns.dirN = quadsQT[idS].dirN
-			childVns.markidS = quadsQT[idS].markidS
-			childVns.lost = 0
-		else
-			-- if it is quadcopter, can wait a little bit
-			if childVns.typeS == "quad" then
-				childVns.lost = childVns.lost + 1
-				if childVns.lost == 3 then
-					sendCMD(idS, "dismiss")
-					vns:remove(idS)
-				end
-			else
-				sendCMD(idS, "dismiss")
-				vns:remove(idS)
-			end
-		end
-
-		-- remove bye ones
-		local cmdListCT = getCMDListCT(idS)
-		for i, cmdC in ipairs(cmdListCT) do
-			if cmdC.cmdS == "bye" then
-				vns:remove(idS)
-			end
-		end
-	end
-
-------------------------------------
--- state machine (deal with other quadcopters mainly)
-------------------------------------
-
-	--------- wandering --------------------
+local rallyPointV = {x = 0, y = 0}
+-- cmd from parent -------------------------------------
 	if vns.stateS == "wandering" then
-		vns.parentS = nil
-
-		-- get recruit cmd
-		local cmdListCT = getCMDListCT()		
-		local maxRecruit = -1
-		local hasRecruit = false
-		for i, cmdC in ipairs(cmdListCT) do
-			if cmdC.cmdS == "recruit" then
-				hasRecruit = true
-				if cmdC.dataNST[1] > maxRecruit then
-					vns.parentS = cmdC.fromIDS
-					maxRecruit = cmdC.dataNST[1] 
-				end
-			end
-		end
-		-- deny all other recruits 
-		for i, cmdC in ipairs(cmdListCT) do
-			if cmdC.cmdS == "recruit" and 
-			   cmdC.fromIDS ~= vns.parentS then
-				sendCMD(cmdC.fromIDS, "deny", {vns.parentS})
-			end
-		end
-
-		if hasRecruit == true then
-			deniedReportCount = 0
-			vns.stateS = "reporting"
-			local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
-			sendCMD(vns.parentS, "VisionInfo", VisionDataNST)
-
-			-- ack to parent
-			sendCMD(vns.parentS, "ack")
-		else
-			-- no recruit, fly randomly
-			local turn = (math.random() - 0.5) * 3
-			local speedxN = (math.random() - 0.5) * 100.0
-			local speedyN = (math.random() - 0.5) * 100.0
-			local speedN = math.sqrt(speedxN * speedxN + speedyN * speedyN)
-			speedxN = speedxN / speedN
-			speedyN = speedyN / speedN
-			setVelocity(speedxN, speedyN, turn)
-			print("fly randomly",speedxN, speedyN)
-
-			if deniedReportCount > 0 then
-				local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
-				sendCMD(deniedReport, "VisionInfo", VisionDataNST)
-				deniedReportCount = deniedReportCount - 1
-			end
-		end
-
-	--------- braining --------------------
-	elseif vns.stateS == "braining" then
-		vns.parentS = nil
-
-	--------- reporting --------------------
+	-- fly randomly
+		local turn = (math.random() - 0.5) * 3
+		local speedLN = (math.random() - 0.5) * 0.50
+		local speedRN = (math.random() - 0.5) * 0.50
+		local speedN = math.sqrt(speedLN * speedLN + speedRN * speedRN)
+		speedLN = speedLN / speedN
+		speedRN = speedRN / speedN
+		setVelocity(speedLN, speedRN, turn)
 	elseif vns.stateS == "reporting" then
-		local noCMD = true
-		local connect = true
-		--local cmdListCT = getCMDListCT(vns.parentS)  
-		local cmdListCT = getCMDListCT()  
+		local cmdListCT = getCMDListCT(vns.parentS)  
+		print(#cmdListCT)
 		for i, cmdC in ipairs(cmdListCT) do
-			-- get fly cmd
-			if cmdC.cmdS == "fly" and cmdC.fromIDS == vns.parentS then
-				noCMD = false
+			if cmdC.cmdS == "fly" then
+				print("i received fly")
+				print(cmdC.dataNST[1])
+				print(cmdC.dataNST[2])
+				print(cmdC.dataNST[3])
+				print(cmdC.dataNST[4])
+				print(cmdC.dataNST[5])
 				rallyPointV = {
 					x = cmdC.dataNST[1],
 					y = cmdC.dataNST[2],
 				}
-				local speedxN = cmdC.dataNST[3]
-				local speedyN = cmdC.dataNST[4]
 				local rotateN = cmdC.dataNST[5]
-
 				if cmdC.dataNST[5] > 5 then
 					rotateN = 5
 				elseif cmdC.dataNST[5] < -5 then
 					rotateN = -5
 				end
-				setVelocity(speedxN, speedyN, rotateN)
-			-- get fly cmd
-			elseif cmdC.cmdS == "takeoverassign" and cmdC.fromIDS == vns.parentS then
-				noCMD = false
-				myTakeoverAssign = cmdC.dataNST[1]
-			elseif cmdC.cmdS == "role" and cmdC.fromIDS == vns.parentS then
-				print("i am", getSelfIDS(), "i received a role cmd", cmdC.dataNST[1])
-				noCMD = false
-				myRole = cmdC.dataNST[1]
-			elseif cmdC.cmdS == "dismiss" and cmdC.fromIDS == vns.parentS then
-				connect = false
-				vns.stateS = "wandering"
-			elseif cmdC.cmdS == "recruit" and myTakeoverAssign ~= cmdC.fromIDS then
-				print("i got a recruit, prepare to deny")
-				sendCMD(cmdC.fromIDS, "deny", {vns.parentS})
-			elseif cmdC.cmdS == "recruit" and myTakeoverAssign == cmdC.fromIDS then
-				print("i got a recruit, prepare to take over")
-				sendCMD(vns.parentS, "bye")
+
+				setVelocity(cmdC.dataNST[3], cmdC.dataNST[4], rotateN)
+			elseif cmdC.cmdS == "shiftingTo" then
+				vns.shiftingTo= cmdC.dataNST[1]
+			end
+		end
+
+		local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
+		sendCMD(vns.parentS, "VisionInfo", VisionDataNST)
+
+	elseif vns.stateS == "braining" then
+		setVelocity(0, 0, 0)
+	end
+
+-- be recruited --------------------------------
+	if vns.stateS == "wandering" then
+		local cmdListCT = getCMDListCT()  
+		for i, cmdC in ipairs(cmdListCT) do
+			if cmdC.cmdS == "recruit" then
+				vns.stateS = "reporting"
 				vns.parentS = cmdC.fromIDS
-				local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
-				sendCMD(vns.parentS, "VisionInfo", VisionDataNST)
-				sendCMD(vns.parentS, "ack")
-				noCMD = false
+
+				myRole = cmdC.dataNST[1]
+
+				print("i am recruited, parent:", vns.parentS)
 			end
 		end
-
-		if noCMD == true then
-			-- I didn't get a valid command when I should be
-			lostCountN = lostCountN + 1
-			if lostCountN > 3 then
-				-- lost
-				vns.stateS = "wandering"
+	end
+	if vns.shiftingTo ~= nil then
+		local cmdListCT = getCMDListCT(vns.shiftingTo)  
+		for i, cmdC in ipairs(cmdListCT) do
+			if cmdC.cmdS == "recruit" then
+				vns.stateS = "reporting"
+				vns.parentS = cmdC.fromIDS
+				print("i am recruited, parent:", vns.parentS)
 			end
-		else
-			lostCountN = 0
-		end
-
-		if connect == true then
-			local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
-			sendCMD(vns.parentS, "VisionInfo", VisionDataNST)
 		end
 	end
 
-------------------------------------
--- always do no matter which state (deal with robots mainly)
-------------------------------------
-
--- recruit new robots ------------------------------
-	for i, robotR in ipairs(robotsRT) do
-		if vns.childrenVnsT[robotR.idS] == nil then
-			-- a new robot
-			sendCMD(robotR.idS, "recruit", {math.random()})
-			local vVns = VNS:new{
-				idS = robotR.idS, locV = robotR.locV, 
-				dirN = robotR.dirN, typeS = "robot", 
-			}
-			vns:add(vVns, "waitingAnswer")
-			vVns.waitingCount = 0
-		end
-	end
-	print("i am",getSelfIDS(),"i see quad:")
-	for i, quadQ in ipairs(quadsQT) do
-		print(quadQ.idS)
-	end
-
-	if vns.stateS == "reporting" or vns.stateS == "braining" and myRole ~= "shifting" then
+-- recruit new quads -----------------------------
+	--if vns.stateS == "wandering" or vns.stateS == "braining" then
+	if vns.stateS == "reporting" or vns.stateS == "braining" then
 		for i, quadQ in ipairs(quadsQT) do
 			if vns.childrenVnsT[quadQ.idS] == nil then
-				-- a new quad
-				print("i am", getSelfIDS(), "i send a recruit to", quadQ.idS)
-				sendCMD(quadQ.idS, "recruit", {math.random()})
-				local vVns = VNS:new{
-					idS = quadQ.idS, locV = quadQ.locV, 
-					dirN = quadQ.dirN, typeS = "quad",
-				}
-				vns:add(vVns, "waitingAnswer")
-				vVns.waitingCount = 0
-			end
-		end
-	end
-
-
--- allocate among possessing ones (reinforce marking and driving)
-	local markingNumberN = 4
-	if vns.stateS == "reporting" then markingNumberN = 2 end
-
-	while table.getSize(vns.childrenRolesVnsTT.marking) < markingNumberN and
-	      table.getSize(vns.childrenRolesVnsTT.driving) ~= 0 do
-		for idS, childRQ in pairs(vns.childrenRolesVnsTT.driving) do
-			vns:changeRole(idS, "marking")
-			sendCMD(idS, "takeoverassign", {nil})
-			break
-		end
-	end
-	while table.getSize(vns.childrenRolesVnsTT.marking) > markingNumberN do
-		for idS, childRQ in pairs(vns.childrenRolesVnsTT.marking) do
-			vns:changeRole(idS, "driving")
-			sendCMD(idS, "takeoverassign", {vns.parentS})
-			break
-		end
-	end
-
-	--TODO: allocate quads
-	if vns.stateS == "reporting" or vns.stateS == "braining" then
-	end
-
--- allocate answering robots ---------------------
-	for idS, childRQ in pairs(vns.childrenRolesVnsTT.waitingAnswer) do
-		local cmdListCT = getCMDListCT(idS)
-		local noCMD = true
-		for i, cmdC in ipairs(cmdListCT) do
-			if cmdC.cmdS == "deny" then
-				vns:remove(idS)
-				-- report
-				if childRQ.typeS == "robot" then
-					if myTakeoverAssign == "everyone" or
-					   myTakeoverAssign == cmdC.dataNST[1] then
-						print("i am", getSelfIDS(), "i send a denied report to", cmdC.dataNST[1])
-						local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
-						sendCMD(cmdC.dataNST[1], "VisionInfo", VisionDataNST)
-						deniedReport = cmdC.dataNST[1]
-						deniedReportCount = 3
-					end
-				elseif childRQ.typeS == "quad" then
-				end
-				noCMD = false
-			elseif cmdC.cmdS == "ack" then
-				print("i am", getSelfIDS(), "i got a ack from", cmdC.fromIDS)
-				if childRQ.typeS == "robot" then
-					local markingNumberN = 4
-					if vns.stateS == "reporting" then markingNumberN = 2 end
-
-					if table.getSize(vns.childrenRolesVnsTT.marking) < markingNumberN then
-						vns:changeRole(idS, "marking")
-						sendCMD(idS, "takeoverassign", {nil})
-					else
-						vns:changeRole(idS, "driving")
-						sendCMD(idS, "takeoverassign", {vns.parentS})
-					end
-
-				elseif childRQ.typeS == "quad" then
-					local allocated = false
+				local assignedRole = "shifting"
+				if myRole ~= nil then
 					if structure[myRole].children ~= nil then
-						for i, childStru in ipairs(structure[myRole].children) do
-							if childStru.fulfill == nil then
-								childStru.fulfill = idS
-								childRQ.roleStru = childStru.role
-								sendCMD(idS, "role", {childStru.role})
-								sendCMD(idS, "takeoverassign", {nil})
-								allocated = true
+						print("recruting quads, for structure.children")
+						for i, v in pairs(structure[myRole].children) do
+							print(v.role)
+							if v.fulfill == nil then
+								assignedRole = v.role
+								v.fulfill = quadQ.idS
 								break
 							end
 						end
 					end
-
-					if allocated == false then
-						print("i am", getSelfIDS(), "i allocated a shifting")
-						childRQ.roleStru = "shifting"
-						sendCMD(idS, "role", {"shifting"})
-						sendCMD(idS, "takeoverassign", {vns.parentS})
-					end
-
-					vns:changeRole(idS, "quads")
-					--end
 				end
-				noCMD = false
+					
+				sendCMD(quadQ.idS, "recruit", {assignedRole})
+				local vVns = VNS:new{
+					idS = quadQ.idS, locV = quadQ.locV, 
+					dirN = quadQ.dirN, typeS = "quad",
+				}
+				vVns.structureRole = assignedRole
+				vns:add(vVns, "waitingAnswer")
 			end
 		end
-
-		if noCMD == true then
-			childRQ.waitingCount = childRQ.waitingCount + 1
-			if childRQ.waitingCount == 3 then
-				vns:remove(idS)
+	end
+	
+-- update vns, remove lost ones, remove denied ones --------------
+	local denyParent = {}
+	for idS, childVns in pairs(vns.childrenVnsT) do
+		if robotsRT[idS] ~= nil then
+			childVns.locV = robotsRT[idS].locV
+			childVns.dirN = robotsRT[idS].dirN
+		elseif quadsQT[idS] ~= nil then
+			childVns.locV = quadsQT[idS].locV
+			childVns.dirN = quadsQT[idS].dirN
+			childVns.markidS = quadsQT[idS].markidS
+		else
+			-- can't see this child anymore
+			--[[
+			if childVns.structureRole ~= nil then
+				structure[childVns.structureRole].fulfill = nil
+				--structure[myRole].children[]childVns.structureRole].fulfill = nil
+				--TODO: delete it properly
 			end
+			--]]
+			vns:remove(idS)
+		end
+
+		-- check deny
+		local cmdListCT = getCMDListCT(idS)  
+		local flag = 0
+		for i, cmdC in ipairs(cmdListCT) do
+			if cmdC.cmdS == "deny" then
+				vns:changeRole(idS, "deny")
+				denyParent[idS] = cmdC.dataNST[1]
+				flag = 1 
+				break 
+			end 
+		end
+
+		-- reinforce marking from driving
+		local markingNumberN = 4
+		if vns.stateS == "reporting" then markingNumberN = 2 end
+		if table.getSize(vns.childrenRolesVnsTT.marking) < markingNumberN then
+			for idS, childRQ in pairs(vns.childrenRolesVnsTT.driving) do
+				vns:changeRole(idS, "marking")
+				break
+			end
+		end
+		if table.getSize(vns.childrenRolesVnsTT.marking) > markingNumberN then
+			for idS, childRQ in pairs(vns.childrenRolesVnsTT.marking) do
+				vns:changeRole(idS, "driving")
+				break
+			end
+		end
+	end
+
+	-- denied
+	-- TODO: selectivly report
+	--	 if i am shifting and denied parent is my target, or wandering, report
+	--	 report to parent elsewhere
+	if vns.stateS == "wandering" then
+		for idS, robotR in pairs(vns.childrenRolesVnsTT.deny) do
+			local parentidS = denyParent[idS]
+			local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
+				-- NST means a table of number or string
+			sendCMD(parentidS, "VisionInfo", VisionDataNST)
+			break
+		end
+	end
+	for idS, robotR in pairs(vns.childrenRolesVnsTT.deny) do
+		vns:remove(idS)
+	end
+
+-- allocate answering robots ---------------------
+	for idS, childRQ in pairs(vns.childrenRolesVnsTT.waitingAnswer) do
+		if childRQ.typeS == "robot" then
+			local markingNumberN = 4
+			if vns.stateS == "reporting" then markingNumberN = 2 end
+			if table.getSize(vns.childrenRolesVnsTT.marking) < markingNumberN then
+				vns:changeRole(idS, "marking")
+			else
+				vns:changeRole(idS, "driving")
+			end
+		elseif childRQ.typeS == "quad" then
+			--if table.getSize(vns.childrenRolesVnsTT.quads) < 4 then
+				--TODO: check children status, add children or make it shifting
+				-- don't need this
+				vns:changeRole(idS, "quads")
+			--end
 		end
 	end
 
@@ -447,85 +320,92 @@ function step()
 		setRobotVelocity(robotR.idS, leftSpeed, rightSpeed)
 	end
 
-	--TODO: drive quads
-	if vns.stateS == "reporting" or vns.stateS == "braining" then
-		for idS, quadQ in pairs(vns.childrenRolesVnsTT.quads) do
-			-- calc the rallypoint (parent location) in his perspective
-			local thN = quadQ.dirN
-			local thRadN = thN * math.pi / 180
-			local newRallyV = {
-				x =  (0 - quadQ.locV.x) * math.cos(thRadN)
-				    +(0 - quadQ.locV.y) * math.sin(thRadN),
-				y = -(0 - quadQ.locV.x) * math.sin(thRadN) 
-				    +(0 - quadQ.locV.y) * math.cos(thRadN), 
-			}
-
-			-- calc fly dir in his perspective
-			local targetPointV = {}
-			if quadQ.roleStru ~= nil and quadQ.roleStru ~= "shifting" then
-				if structure[myRole].children ~= nil then
-					for i, v in pairs(structure[myRole].children) do
-						if v.role == quadQ.roleStru then
-							targetPointV.x = v.position.x
-							targetPointV.y = v.position.y
-							targetPointV.dir = v.position.dir
-							break
-						end
+	-- quadcopters
+	for idS, quadQ in pairs(vns.childrenRolesVnsTT.quads) do
+		-- calc the rallypoint in his perspective
+		local thN = quadQ.dirN
+		local thRadN = thN * math.pi / 180
+		local newRallyV = {
+			x =  (0 - quadQ.locV.x) * math.cos(thRadN)
+			    +(0 - quadQ.locV.y) * math.sin(thRadN),
+			y = -(0 - quadQ.locV.x) * math.sin(thRadN) 
+			    +(0 - quadQ.locV.y) * math.cos(thRadN), 
+		}
+		-- calc fly dir in his perspective
+		--TODO: fly towards point
+		local targetPointV = {}
+		if quadQ.structureRole == "shifting" then
+			targetPointV.x = rallyPointV.x
+			targetPointV.y = rallyPointV.y
+		elseif quadQ.structureRole ~= nil and quadQ.structureRole ~= "shifting" then
+			if structure[myRole].children ~= nil then
+				for i, v in pairs(structure[myRole].children) do
+					if v.fulfill ~= nil then
+						targetPointV.x = v.position.x
+						targetPointV.y = v.position.y
+						targetPointV.dir = v.position.dir
+						break
 					end
 				end
-			else
-				targetPointV.x = rallyPointV.x
-				targetPointV.y = rallyPointV.y
-				targetPointV.dir = quadQ.dirN
 			end
+		end
+		local newTargetPointV = {
+			x =  (targetPointV.x - quadQ.locV.x) * math.cos(thRadN)
+			    +(targetPointV.y - quadQ.locV.y) * math.sin(thRadN),
+			y = -(targetPointV.x - quadQ.locV.x) * math.sin(thRadN) 
+			    +(targetPointV.y - quadQ.locV.y) * math.cos(thRadN), 
+		}
 
-			local newTargetPointV = {
-				x =  (targetPointV.x - quadQ.locV.x) * math.cos(thRadN)
-				    +(targetPointV.y - quadQ.locV.y) * math.sin(thRadN),
-				y = -(targetPointV.x - quadQ.locV.x) * math.sin(thRadN) 
-				    +(targetPointV.y - quadQ.locV.y) * math.cos(thRadN), 
+		local dis = math.sqrt(newTargetPointV.x * newTargetPointV.x +
+		                      newTargetPointV.y * newTargetPointV.y )
+		local dirV = {
+			--x = newTargetPointV.x / dis * 5,
+			--y = newTargetPointV.y / dis * 5,
+			x = newTargetPointV.x * dis * 0.011,
+			y = newTargetPointV.y * dis * 0.011,
+		}
+
+		-- calc rotate 
+		--local dirQuadtoCenter = calcDir(quadQ.locV, {x=0, y=0})
+		local difN
+		if targetPointV.dir ~= nil then
+			difN = targetPointV.dir - quadQ.dirN
+		else
+			difN = 0
+		end
+		while difN > 180 do difN = difN - 360 end
+		while difN < -180 do difN = difN + 360 end
+
+		print("i am", getSelfIDS(), "i send a fly cmd")
+		sendCMD(idS, "fly", {newRallyV.x, newRallyV.y, dirV.x, dirV.y, difN})
+	end
+
+-- recruit new robots ------------------------------
+	for i, robotR in ipairs(robotsRT) do
+		if vns.childrenVnsT[robotR.idS] == nil then
+			-- a new robot
+			sendCMD(robotR.idS, "recruit", {math.random()})
+			local vVns = VNS:new{
+				idS = robotR.idS, locV = robotR.locV, 
+				dirN = robotR.dirN, typeS = "robot", 
+				stateS = "2",
 			}
-			local dis = math.sqrt(newTargetPointV.x * newTargetPointV.x +
-			                      newTargetPointV.y * newTargetPointV.y )
-			local dirV = {
-				x = newTargetPointV.x / dis * 1,
-				y = newTargetPointV.y / dis * 1,
-			}
-			if dis < 50 then
-				dirV.x = 0
-				dirV.y = 0
-			end
-
-			-- calc rotate 
-			local difN
-			if targetPointV.dir ~= nil then
-				difN = targetPointV.dir - quadQ.dirN
-			else
-				difN = 0
-			end
-			while difN > 180 do difN = difN - 360 end
-			while difN < -180 do difN = difN + 360 end
-
-			sendCMD(idS, "fly", {newRallyV.x, newRallyV.y, dirV.x, dirV.y, difN})
+			vns:add(vVns, "waitingAnswer")
 		end
 	end
 
-print(getSelfIDS(), vns.stateS, myRole, myTakeoverAssign)
+print(getSelfIDS(), vns.stateS)
 print("childrenlist:")
 for i, vVns in pairs(vns.childrenVnsT) do
-	if vVns.roleS ~= "waitingAnswer" then
-		print("\t",vVns.idS, vVns.roleS, vVns.parentS, vVns.roleStru)
-	end
+	print("\t",vVns.idS, vVns.roleS, vVns.parentS, vVns.structureRole)
 end
 
 print("grouplist:")
 for i, vVnsT in pairs(vns.childrenRolesVnsTT) do
-	--if i ~= "waitingAnswer" then
-		print("\t", i)
-		for j, vVns in pairs(vVnsT) do
-			print("\t\t", vVns.idS)
-		end
-	--end
+	print("\t", i)
+	for j, vVns in pairs(vVnsT) do
+		print("\t\t", vVns.idS)
+	end
 end
 
 -- buffer new robots ----------------------------------

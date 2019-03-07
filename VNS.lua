@@ -48,6 +48,8 @@ function VNS:create(option)
 	instance.childrenN = 0
 	instance.childrenRolesVnsTT = {new = {},}
 
+	instance.lost = 0
+
 	return instance
 end
 

@@ -39,6 +39,8 @@ stateMachine = State:create{
 					end
 				end
 				if hasRecruit == true then
+					-- ack to parent
+					sendCMD(fdata.parentID, "ack")
 					return "beingDriven"
 				end
 			end,
@@ -66,7 +68,8 @@ stateMachine = State:create{
 	-- end of randomwalk -------------
 	-- beingDriven -------------------
 		beingDriven = State:create{
-			data = {lostCountN = 0,},
+			data = {lostCountN = 0,
+			        takeoverAssign = nil,},
 			enterMethod = function() setSpeed(0, 0) --[[print(getPrintTabs(), "driven")--]] end,
 			transMethod = function(fdata, data, para)
 				local cmdListCT = getCMDListCT()		
@@ -78,6 +81,9 @@ stateMachine = State:create{
 						setSpeed(cmdC.dataNST[1], cmdC.dataNST[2])
 						sendCMD(cmdC.fromIDS, "sensor", getProximityTableNT())
 						noCMD = false
+					elseif cmdC.cmdS == "takeoverassign" and cmdC.fromIDS == fdata.parentID then
+						data.takeoverAssign = cmdC.dataNST[1]
+						noCMD = false
 					elseif cmdC.cmdS == "dismiss" and cmdC.fromIDS == fdata.parentID then
 						fdata.parentID = nil
 						--print(getPrintTabs(), "disfdr")
@@ -85,14 +91,19 @@ stateMachine = State:create{
 					elseif cmdC.cmdS == "turnBySelf" and cmdC.fromIDS == fdata.parentID then
 						fdata.turnDir = cmdC.dataNST[1]
 						return "turnBySelf"
-					elseif cmdC.cmdS == "recruit" then
+					elseif cmdC.cmdS == "recruit" and data.takeoverAssign ~= cmdC.fromIDS then
 						sendCMD(cmdC.fromIDS, "deny", {fdata.parentID})
+					elseif cmdC.cmdS == "recruit" and data.takeoverAssign == cmdC.fromIDS then
+						sendCMD(fdata.parentID, "bye")
+						fdata.parentID = cmdC.fromIDS
+						sendCMD(fdata.parentID, "ack")
+						noCMD = false
 					end
 				end
 				if noCMD == true then
 					-- I didn't get a valid command when I should be
 					data.lostCountN = data.lostCountN + 1
-					if data.lostCountN > 0 then
+					if data.lostCountN > 3 then
 						-- lost
 						return "randomWalk"
 					end
@@ -117,20 +128,29 @@ stateMachine = State:create{
 				for i, cmdC in ipairs(cmdListCT) do
 					if cmdC.cmdS == "keepgoing" and cmdC.fromIDS == fdata.parentID then
 						noCMD = false
+					elseif cmdC.cmdS == "takeoverassign" and cmdC.fromIDS == fdata.parentID then
+						data.takeoverAssign = cmdC.dataNST[1]
+						noCMD = false
 					elseif cmdC.cmdS == "beingDriven" and cmdC.fromIDS == fdata.parentID then
 						return "beingDriven"
 					elseif cmdC.cmdS == "dismiss" and cmdC.fromIDS == fdata.parentID then
 						fdata.parentID = nil
 						--print(getPrintTabs(), "disftur")
 						return "randomWalk"
-					elseif cmdC.cmdS == "recruit" then
+					elseif cmdC.cmdS == "recruit" and data.takeoverAssign ~= cmdC.fromIDS then
 						sendCMD(cmdC.fromIDS, "deny", {fdata.parentID})
+					elseif cmdC.cmdS == "recruit" and data.takeoverAssign == cmdC.fromIDS then
+						sendCMD(fdata.parentID, "bye")
+						fdata.parentID = cmdC.fromIDS
+						sendCMD(fdata.parentID, "ack")
+						noCMD = false
+						return "beingDriven"
 					end
 				end
 				if noCMD == true then
 					-- I didn't get a valid command when I should be
 					data.lostCountN = data.lostCountN + 1
-					if data.lostCountN > 0 then
+					if data.lostCountN > 3 then
 						-- lost
 						--print(getPrintTabs(), "lost")
 						return "randomWalk"
