@@ -32,17 +32,23 @@ local structure = {
 			{
 				role = "arm1",
 				position = {y = 1 * baseDis, x = 0, dir = -90},
-				fulfill = nil,
 			},
 			{
 				role = "arm2",
 				position = {y = -1 * baseDis, x = 0, dir = 90},
-				fulfill = nil,
 			},
 		},
 	},
-	arm1 = {},
+	arm1 = {
+		children = {
+			{
+				role = "finger1",
+				position = {y = 1 * baseDis, x = 0, dir = -90},
+			},
+		},
+	},
 	arm2 = {},
+	finger1 = {},
 }
 local myRole
 
@@ -171,6 +177,10 @@ function step()
 	--------- wandering --------------------
 	if vns.stateS == "wandering" then
 		vns.parentS = nil
+		myRole = nil
+		myTakeoverAssign = "everyone"
+		rallyPointV = {x = 0, y = 0}
+
 
 		-- get recruit cmd
 		local cmdListCT = getCMDListCT()		
@@ -348,9 +358,33 @@ function step()
 		end
 	end
 
-	--TODO: allocate quads
+	-- allocate quads
+	--[[
 	if vns.stateS == "reporting" or vns.stateS == "braining" then
+		if myRole ~= nil and structure[myRole].children ~= nil then
+			for i, childStru in ipairs(structure[myRole].children) do
+				local fulfilled = false
+				for i, v in ipairs(vns.childrenRolesVnsTT.quads) do
+					if v.roleStru == childStru.role then
+						fulfilled = true
+						break
+					end
+				end
+				if fulfilled == false then
+					for idS, v in ipairs(vns.childrenRolesVnsTT.quads) do
+						if v.roleStru == "shifting" then
+							v.roleStru = childStru.role
+							sendCMD(idS, "role", {childStru.role})
+							sendCMD(idS, "role", {childStru.role})
+							sendCMD(idS, "takeoverassign", {nil})
+							break
+						end
+					end
+				end
+			end
+		end
 	end
+	--]]
 
 -- allocate answering robots ---------------------
 	for idS, childRQ in pairs(vns.childrenRolesVnsTT.waitingAnswer) do
@@ -390,8 +424,14 @@ function step()
 					local allocated = false
 					if structure[myRole].children ~= nil then
 						for i, childStru in ipairs(structure[myRole].children) do
-							if childStru.fulfill == nil then
-								childStru.fulfill = idS
+							local fulfilled = false
+							for i, v in pairs(vns.childrenRolesVnsTT.quads) do
+								if v.roleStru == childStru.role then
+									fulfilled = true
+									break
+								end
+							end
+							if fulfilled == false then
 								childRQ.roleStru = childStru.role
 								sendCMD(idS, "role", {childStru.role})
 								sendCMD(idS, "takeoverassign", {nil})
@@ -520,12 +560,12 @@ end
 
 print("grouplist:")
 for i, vVnsT in pairs(vns.childrenRolesVnsTT) do
-	--if i ~= "waitingAnswer" then
+	if i ~= "waitingAnswer" then
 		print("\t", i)
 		for j, vVns in pairs(vVnsT) do
 			print("\t\t", vVns.idS)
 		end
-	--end
+	end
 end
 
 -- buffer new robots ----------------------------------
