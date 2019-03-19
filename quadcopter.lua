@@ -70,7 +70,6 @@ function reset()
 	vns.childrenRolesVnsTT.driving = {}
 	vns.childrenRolesVnsTT.quads = {}
 	vns.childrenRolesVnsTT.waitingAnswer= {}
-	vns.childrenRolesVnsTT.deny = {}
 
 	myTakeoverAssign = "everyone"
 
@@ -89,6 +88,8 @@ function step()
 	if getSelfIDS() == "quadcopter0" then
 		print()
 		print()
+		print("------------------------------------------------")
+		print("------------------------------------------------")
 	end
 	print("---------------------")
 
@@ -220,7 +221,6 @@ function step()
 			speedxN = speedxN / speedN
 			speedyN = speedyN / speedN
 			setVelocity(speedxN, speedyN, turn)
-			print("fly randomly",speedxN, speedyN)
 
 			if deniedReportCount > 0 then
 				local VisionDataNST = makeVisionInfoDataNST(robotsRT, boxesVT) 
@@ -315,10 +315,6 @@ function step()
 			vns:add(vVns, "waitingAnswer")
 			vVns.waitingCount = 0
 		end
-	end
-	print("i am",getSelfIDS(),"i see quad:")
-	for i, quadQ in ipairs(quadsQT) do
-		print(quadQ.idS)
 	end
 
 	if vns.stateS == "reporting" or vns.stateS == "braining" and myRole ~= "shifting" then
@@ -422,6 +418,7 @@ function step()
 
 				elseif childRQ.typeS == "quad" then
 					local allocated = false
+					if myRole ~= nil and myRole ~= "shifting" then
 					if structure[myRole].children ~= nil then
 						for i, childStru in ipairs(structure[myRole].children) do
 							local fulfilled = false
@@ -439,6 +436,7 @@ function step()
 								break
 							end
 						end
+					end
 					end
 
 					if allocated == false then
@@ -503,6 +501,7 @@ function step()
 			-- calc fly dir in his perspective
 			local targetPointV = {}
 			if quadQ.roleStru ~= nil and quadQ.roleStru ~= "shifting" then
+				if myRole ~= nil and myRole ~= "shifting" then
 				if structure[myRole].children ~= nil then
 					for i, v in pairs(structure[myRole].children) do
 						if v.role == quadQ.roleStru then
@@ -512,6 +511,7 @@ function step()
 							break
 						end
 					end
+				end
 				end
 			else
 				targetPointV.x = rallyPointV.x
@@ -568,12 +568,13 @@ for i, vVnsT in pairs(vns.childrenRolesVnsTT) do
 	end
 end
 
--- buffer new robots ----------------------------------
 --[[
-	for idS, robotR in pairs(vns.childrenRolesVnsTT.new) do
-		vns:changeRole(idS, "waitingAnswer")
-	end
+print("i see quad:")
+for i, quadQ in ipairs(quadsQT) do
+	print(quadQ.idS)
+end
 --]]
+
 end
 
 -------------------------------------------------------------------

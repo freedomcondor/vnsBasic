@@ -291,6 +291,9 @@
       </devices>
     </prototype>
 
+
+    <!-->
+    <-->
 	<prototype id="quadcopter3_" movable="false">
       <body position="0.5,0.8,0.5" orientation="0,0,0" />
       <controller config="quadcopter_controller"/>
@@ -324,6 +327,7 @@
         </radios>
       </devices>
     </prototype>
+
 
     <!-->
     <prototype id="quadcopter4" movable="false">
